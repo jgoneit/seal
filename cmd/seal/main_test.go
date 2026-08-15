@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -42,6 +45,113 @@ func TestRunCLIInformationalCommands(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMainInformationalCommandsIgnoreDeletedWorkingDirectory(t *testing.T) {
+	// Frozen Reference 94bb931 handles exact informational flags before any
+	// repository or working-directory lookup; normal and deleted cwd output is
+	// byte-identical.
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit removing a process's current directory")
+	}
+	tests := []struct {
+		name       string
+		argument   string
+		wantOutput string
+	}{
+		{name: "help", argument: "--help", wantOutput: help},
+		{name: "version", argument: "--version", wantOutput: version + "\n"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			normal := runMainSubprocess(t, false, test.argument)
+			deleted := runMainSubprocess(t, true, test.argument)
+			for mode, result := range map[string]mainSubprocessResult{"normal": normal, "deleted": deleted} {
+				if result.code != 0 {
+					t.Fatalf("%s cwd exit code = %d, stderr = %q", mode, result.code, result.stderr)
+				}
+				if result.stdout != test.wantOutput {
+					t.Fatalf("%s cwd stdout = %q, want %q", mode, result.stdout, test.wantOutput)
+				}
+				if result.stderr != "" {
+					t.Fatalf("%s cwd stderr = %q, want empty", mode, result.stderr)
+				}
+			}
+			if normal != deleted {
+				t.Fatalf("normal cwd result = %#v, deleted cwd result = %#v", normal, deleted)
+			}
+		})
+	}
+}
+
+type mainSubprocessResult struct {
+	code   int
+	stdout string
+	stderr string
+}
+
+func runMainSubprocess(t *testing.T, deleteWorkingDirectory bool, args ...string) mainSubprocessResult {
+	t.Helper()
+	workingDirectory := filepath.Join(t.TempDir(), "cwd")
+	if err := os.Mkdir(workingDirectory, 0o755); err != nil {
+		t.Fatalf("Mkdir(%q): %v", workingDirectory, err)
+	}
+	commandArgs := append([]string{"-test.run=^TestMainSubprocessHelper$", "--"}, args...)
+	command := exec.Command(os.Args[0], commandArgs...)
+	command.Dir = workingDirectory
+	command.Env = append(
+		os.Environ(),
+		"SEAL_MAIN_SUBPROCESS_HELPER=1",
+		"SEAL_MAIN_DELETE_CWD="+strconv.FormatBool(deleteWorkingDirectory),
+	)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	code := 0
+	if err != nil {
+		var exitError *exec.ExitError
+		if !errors.As(err, &exitError) {
+			t.Fatalf("run helper process: %v", err)
+		}
+		code = exitError.ExitCode()
+	}
+	return mainSubprocessResult{code: code, stdout: stdout.String(), stderr: stderr.String()}
+}
+
+func TestMainSubprocessHelper(t *testing.T) {
+	if os.Getenv("SEAL_MAIN_SUBPROCESS_HELPER") != "1" {
+		return
+	}
+	separator := -1
+	for index, argument := range os.Args {
+		if argument == "--" {
+			separator = index
+			break
+		}
+	}
+	if separator < 0 {
+		fmt.Fprintln(os.Stderr, "helper: missing argument separator")
+		os.Exit(97)
+	}
+	if os.Getenv("SEAL_MAIN_DELETE_CWD") == "true" {
+		workingDirectory, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "helper: resolve working directory: %v\n", err)
+			os.Exit(97)
+		}
+		if err := os.Remove(workingDirectory); err != nil {
+			fmt.Fprintf(os.Stderr, "helper: remove working directory: %v\n", err)
+			os.Exit(97)
+		}
+		if err := os.Unsetenv("PWD"); err != nil {
+			fmt.Fprintf(os.Stderr, "helper: unset PWD: %v\n", err)
+			os.Exit(97)
+		}
+	}
+	os.Args = append([]string{"seal"}, os.Args[separator+1:]...)
+	main()
 }
 
 func TestRunCLITaskShowReturnsStoredObjectWithoutSchemaAuthority(t *testing.T) {

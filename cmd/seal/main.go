@@ -29,12 +29,24 @@ Task creation, verification, completion, and latest-id selection are unsupported
 `
 
 func main() {
+	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func runMain(args []string, stdout, stderr io.Writer) int {
+	if isInformationalCommand(args) {
+		return runCLI("", args, stdout, stderr)
+	}
+
 	workingDirectory, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: could not resolve the working directory: %v\n", err)
-		os.Exit(3)
+		fmt.Fprintf(stderr, "error: could not resolve the working directory: %v\n", err)
+		return 3
 	}
-	os.Exit(runCLI(workingDirectory, os.Args[1:], os.Stdout, os.Stderr))
+	return runCLI(workingDirectory, args, stdout, stderr)
+}
+
+func isInformationalCommand(args []string) bool {
+	return len(args) == 1 && (args[0] == "--help" || args[0] == "--version")
 }
 
 func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
