@@ -1,0 +1,26 @@
+{
+  "baseline": "793b41cc849691bdbcad041b346927077210f7a6",
+  "checks": [
+    {
+      "argv": [
+        "python3",
+        "scripts/sync_contracts.py",
+        "--check"
+      ],
+      "name": "contract-sync",
+      "required": true,
+      "timeout_seconds": 60
+    }
+  ],
+  "id": "SL-CONFIG-TEST-ISOLATION-001",
+  "objective": "Make the Codex credential sandbox smoke test independent of ambient user configuration by running it with an isolated trusted CODEX_HOME.",
+  "risk": "low",
+  "schema_version": 1,
+  "scope": [
+    "tests/test_codex_permissions.py"
+  ],
+  "type": "test",
+  "verifier": {
+    "required": false
+  }
+}

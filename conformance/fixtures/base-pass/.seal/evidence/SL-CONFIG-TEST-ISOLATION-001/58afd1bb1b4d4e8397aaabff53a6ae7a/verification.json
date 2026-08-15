@@ -1,0 +1,28 @@
+{
+  "baseline": "793b41cc849691bdbcad041b346927077210f7a6",
+  "changed_files": [],
+  "duration": 0.0,
+  "evidence_files": [
+    "task.json",
+    "source-before-checks.json",
+    "source-after-checks.json",
+    "changed-files.json",
+    "diff.patch",
+    "checks.json",
+    "checks/000-contract-sync-a58dc509ede1.stdout",
+    "checks/000-contract-sync-a58dc509ede1.stderr",
+    "verification.json"
+  ],
+  "mechanical_result": "pass",
+  "required_checks_pass": true,
+  "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+  "schema_version": 2,
+  "scope_pass": true,
+  "scope_violations": [],
+  "source_after_checks_sha256": "75848d80dcf47a01c50db2377e2015a92b159a4412b43ce3c8fddae92e0af979",
+  "source_before_checks_sha256": "75848d80dcf47a01c50db2377e2015a92b159a4412b43ce3c8fddae92e0af979",
+  "source_snapshot_schema_version": 1,
+  "source_stable_during_checks": true,
+  "task_id": "SL-CONFIG-TEST-ISOLATION-001",
+  "timestamp": "2026-08-15T11:56:31.848376Z"
+}

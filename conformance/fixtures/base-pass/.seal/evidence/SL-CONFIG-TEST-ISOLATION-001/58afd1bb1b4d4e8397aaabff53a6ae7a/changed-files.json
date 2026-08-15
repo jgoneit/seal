@@ -1,0 +1,8 @@
+{
+  "baseline": "793b41cc849691bdbcad041b346927077210f7a6",
+  "changes": [],
+  "schema_version": 1,
+  "scope": [
+    "tests/test_codex_permissions.py"
+  ]
+}

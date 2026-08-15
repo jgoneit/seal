@@ -1,0 +1,24 @@
+{
+  "checks": [
+    {
+      "argv": [
+        "python3",
+        "scripts/sync_contracts.py",
+        "--check"
+      ],
+      "cwd": "<repository>",
+      "duration_seconds": 0.07156512513756752,
+      "effective_timeout": 60,
+      "exit_code": 0,
+      "finished_at": "2026-08-15T11:55:30.588521Z",
+      "name": "contract-sync",
+      "passed": true,
+      "required": true,
+      "started_at": "2026-08-15T11:55:30.516899Z",
+      "stderr_path": "checks/000-contract-sync-a58dc509ede1.stderr",
+      "stdout_path": "checks/000-contract-sync-a58dc509ede1.stdout",
+      "timed_out": false
+    }
+  ],
+  "schema_version": 1
+}
