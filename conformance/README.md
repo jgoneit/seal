@@ -84,14 +84,17 @@ the handled boundary as exit 1 with a terminal `ValueError`. `cases.json`
 expresses the number as a compact repeat specification rather than storing the
 large lexeme in every artifact.
 
-## Blocked deep-nesting case
+## Approved bounded-nesting divergence
 
-A stored Task object containing 10,000 nested arrays is a known compatibility
-gap: the frozen Reference returns exit 0 and renders it, while Go's
-`encoding/json` depth limit rejects it. The case is deliberately absent from
-the executable corpus to avoid checking in or materializing its huge stdout.
-Parity is **not** claimed for this boundary; it remains blocked and separately
-recorded here.
+A stored Task object containing 10,000 nested arrays is the one explicitly
+approved resource-limit divergence: the frozen Reference returns exit 0 and
+renders roughly 200 MB, while Go keeps the standard `encoding/json` nesting
+bound and returns exit 1 with empty stdout. The Go regression
+`TestRunCLITaskShowAppliesApprovedJSONDepthLimitWithoutWrites` generates the
+small nested input in a temporary directory and verifies the exit, streams,
+and no-write contract. Neither the huge Reference stdout nor a materialized
+fixture is committed. The exact narrow approval is recorded in
+`read-only-contract.md` and does not weaken any Acceptance-semantic contract.
 
 The frozen Reference has two material security limitations represented rather
 than repaired here:

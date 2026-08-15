@@ -30,6 +30,10 @@ Migration work proceeds as small vertical slices:
 5. Keep the Python implementation canonical until the transition criteria are
    separately reviewed and approved.
 
+Python remains authoritative for Acceptance semantics. An explicitly approved
+resource-limit divergence may be retained only when its narrow scope is
+recorded in the conformance contract and protected by a regression test.
+
 Persisted root and Evidence compatibility must be decided before the first Go
 writer is introduced. This bootstrap creates no runtime data and makes no
 automatic migration claim.

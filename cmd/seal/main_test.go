@@ -162,6 +162,34 @@ func TestRunCLITaskShowPreservesReferenceEncodingOutcomes(t *testing.T) {
 	})
 }
 
+func TestRunCLITaskShowAppliesApprovedJSONDepthLimitWithoutWrites(t *testing.T) {
+	// The frozen Reference renders roughly 200 MB for this 10,000-depth value.
+	// This approved-divergence regression creates only the compact input in a
+	// temporary repository and never materializes or stores Reference stdout.
+	repository := initTestRepository(t)
+	taskPath := filepath.Join(repository, ".seal", "tasks", "TASK-DEPTH-LIMIT.json")
+	contents := `{"value":` + strings.Repeat("[", 10_000) + `0` + strings.Repeat("]", 10_000) + `}`
+	mustWriteTestFile(t, taskPath, []byte(contents))
+	before := snapshotTestTree(t, repository)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := runCLI(repository, []string{"task", "show", "TASK-DEPTH-LIMIT"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("runCLI() code = %d, want 1; stderr = %q", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout length = %d, want zero", stdout.Len())
+	}
+	wantStderr := "error: Task snapshot 'TASK-DEPTH-LIMIT' exceeds the supported JSON nesting depth.\n"
+	if got := stderr.String(); got != wantStderr {
+		t.Fatalf("stderr = %q, want %q", got, wantStderr)
+	}
+	if after := snapshotTestTree(t, repository); !reflect.DeepEqual(after, before) {
+		t.Fatalf("task show changed the repository\nbefore: %#v\nafter: %#v", before, after)
+	}
+}
+
 func TestRunCLIShowsValidatedConformanceRunWithoutWrites(t *testing.T) {
 	repository := conformanceRepository(t)
 	before := snapshotTestTree(t, filepath.Join(repository, ".seal"))

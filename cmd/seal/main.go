@@ -70,7 +70,7 @@ func showTask(cwd, taskID string, stdout, stderr io.Writer) int {
 		kind, ok := taskstate.KindOf(err)
 		if ok {
 			switch kind {
-			case taskstate.EncodingFailure, taskstate.NumericFailure:
+			case taskstate.EncodingFailure, taskstate.NumericFailure, taskstate.NestingLimitFailure:
 				return 1
 			case taskstate.Repository:
 				return 3

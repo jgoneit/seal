@@ -17,7 +17,7 @@ for the exact identities and persisted bytes represented here.
 
 | Reference concern | Go reproduces | Reference-only | Excluded |
 | --- | --- | --- | --- |
-| Stored Task JSON object | Yes | | |
+| Stored Task JSON object | Yes, within bounded JSON nesting | | |
 | Task normalized snapshot meaning | Yes | | |
 | Evidence v2 mechanical documents | Yes | | |
 | S0/S1 stored consistency | Yes | | |
@@ -160,7 +160,7 @@ is returned. This is another known frozen security limitation.
 | Exit | Meaning for these commands |
 | ---: | --- |
 | 0 | Stored Task object or structurally valid Run was read; a valid Run may have mechanical result `pass` or `fail`. |
-| 1 | An unhandled stored-Task text encoding or numeric conversion failure escaped the Reference CLI boundary. |
+| 1 | A stored-Task encoding or numeric conversion failure, or the approved Go JSON nesting resource limit. |
 | 2 | Invalid CLI identity/input or stored Task/Run identity contradiction. |
 | 3 | Repository-root resolution failed. |
 | 8 | Evidence is missing, malformed, contradictory, unsupported, unsafe, or tampered. |
@@ -171,14 +171,30 @@ to stderr. In the frozen numeric/surrogateescape edge cases above, the bytes
 are authoritative even when they are not strict UTF-8 JSON. Completion-only
 exits are not used by `run show`.
 
-## Blocked case: 10,000 nested arrays
+## Approved divergence: bounded JSON nesting/resource limit
 
 The frozen Reference accepts a stored Task object whose value contains 10,000
-nested arrays and returns exit 0. The current Go `encoding/json` depth limit
-rejects that input. This huge-output probe is intentionally not included in
-`cases.json` or `reference-results.json`; therefore the executable conformance
-corpus does not prove, and this document does not claim, parity for that
-boundary.
+nested arrays, returns exit 0, leaves stderr empty, and renders roughly 200 MB
+of pretty-printed stdout. The Go Candidate deliberately retains the standard
+`encoding/json` nesting bound: it returns exit 1, leaves stdout empty, and
+writes one deterministic `error:` line identifying the supported JSON nesting
+depth limit.
+
+This approval applies only to this `task show` case when an extreme nesting
+depth is rejected by the Go standard JSON decoder's max-depth limit. It does
+not establish a general parser or encoder exception, and it does not permit
+divergence in Task/Run identity, mechanical result, Scope, required checks,
+source stability, Evidence digest, manifest validity, path confinement,
+ordinary supported-input exit categories, or Acceptance and Completion
+meaning.
+
+The difference affects only opaque `task show` display for a pathological
+resource input. It does not participate in stored Run integrity, mechanical
+state, source identity, Evidence digest, or Completion. Reproducing the
+Reference's roughly 200 MB rendering would require a custom parser or formatter
+whose implementation, security, and maintenance cost is not justified by this
+Acceptance slice. The regression generates the input in a temporary directory;
+the huge input/output is not stored in the repository corpus.
 
 ## Read-only and trust properties
 

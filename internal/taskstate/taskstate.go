@@ -57,6 +57,9 @@ const (
 	// NumericFailure identifies CPython JSON integer conversion failures that
 	// escape its handled invalid-input boundary. The CLI maps it to exit code 1.
 	NumericFailure
+	// NestingLimitFailure identifies the explicitly approved standard JSON
+	// decoder nesting-limit divergence. The CLI maps it to exit code 1.
+	NestingLimitFailure
 )
 
 // Error is a classified Task lookup failure.
@@ -125,6 +128,12 @@ func Show(cwd, taskID string) (Document, error) {
 	normalized, markers := replacePythonConstants(contents)
 	value, err := decodeJSONValue(normalized)
 	if err != nil {
+		if isStandardJSONDepthLimit(err) {
+			return Document{}, nestingLimitFailure(
+				fmt.Sprintf("Task snapshot '%s' exceeds the supported JSON nesting depth.", taskID),
+				err,
+			)
+		}
 		return Document{}, invalidJSON(taskID, err)
 	}
 	if containsOversizedPythonInteger(contents) {
@@ -151,6 +160,12 @@ func Show(cwd, taskID string) (Document, error) {
 	if hasSurrogateEscape {
 		value, err = decodeJSONValue(rewritten)
 		if err != nil {
+			if isStandardJSONDepthLimit(err) {
+				return Document{}, nestingLimitFailure(
+					fmt.Sprintf("Task snapshot '%s' exceeds the supported JSON nesting depth.", taskID),
+					err,
+				)
+			}
 			return Document{}, invalidJSON(taskID, err)
 		}
 	} else {
@@ -210,6 +225,11 @@ func decodeJSONValue(contents []byte) (any, error) {
 		return nil, err
 	}
 	return value, nil
+}
+
+func isStandardJSONDepthLimit(err error) bool {
+	var syntaxError *json.SyntaxError
+	return errors.As(err, &syntaxError) && strings.Contains(syntaxError.Error(), "exceeded max depth")
 }
 
 func containsOversizedPythonInteger(contents []byte) bool {
@@ -873,4 +893,8 @@ func encodingFailure(message string, cause error) error {
 
 func numericFailure(message string, cause error) error {
 	return &Error{kind: NumericFailure, message: message, cause: cause}
+}
+
+func nestingLimitFailure(message string, cause error) error {
+	return &Error{kind: NestingLimitFailure, message: message, cause: cause}
 }
