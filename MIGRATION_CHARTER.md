@@ -34,6 +34,9 @@ Persisted root and Evidence compatibility must be decided before the first Go
 writer is introduced. This bootstrap creates no runtime data and makes no
 automatic migration claim.
 
+The first implemented slice is exact-identity, read-only `.seal` Task and Run
+query compatibility; it introduces no writer or lifecycle transition.
+
 ## Explicit exclusions
 
 The migration does not bring over Python packaging, private helpers, Codex
