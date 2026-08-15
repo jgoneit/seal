@@ -479,6 +479,61 @@ func TestCPythonIntegerLimitDoesNotApplyToFloatExponentOrString(t *testing.T) {
 	}
 }
 
+func TestCPythonIntegerLimitPrecedesLaterJSONSyntaxFailure(t *testing.T) {
+	// Frozen seal-legacy at 94bb931a7934efe31549d4c21dc7153e43f27a08
+	// exits 1 with ValueError before it reaches the later malformed object token.
+	repository := initRepository(t)
+	tasks := filepath.Join(repository, ".seal", "tasks")
+	mustMkdirAll(t, tasks)
+	digits4301 := strings.Repeat("9", 4301)
+
+	tests := []struct {
+		name     string
+		taskID   string
+		contents string
+		wantKind ErrorKind
+	}{
+		{
+			name:     "oversized integer precedes later syntax error",
+			taskID:   "INTEGER-BEFORE-SYNTAX",
+			contents: `{"value":` + digits4301 + `, BAD}`,
+			wantKind: NumericFailure,
+		},
+		{
+			name:     "syntax error precedes oversized integer",
+			taskID:   "SYNTAX-BEFORE-INTEGER",
+			contents: `{"value":BAD,"later":` + digits4301 + `}`,
+			wantKind: InvalidInput,
+		},
+		{
+			name:     "decimal remains a float before syntax error",
+			taskID:   "DECIMAL-BEFORE-SYNTAX",
+			contents: `{"value":` + digits4301 + `.0, BAD}`,
+			wantKind: InvalidInput,
+		},
+		{
+			name:     "exponent remains a float before syntax error",
+			taskID:   "EXPONENT-BEFORE-SYNTAX",
+			contents: `{"value":` + digits4301 + `e0, BAD}`,
+			wantKind: InvalidInput,
+		},
+		{
+			name:     "digits in string do not affect syntax error",
+			taskID:   "STRING-BEFORE-SYNTAX",
+			contents: `{"value":"` + digits4301 + `", BAD}`,
+			wantKind: InvalidInput,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mustWriteFile(t, filepath.Join(tasks, test.taskID+".json"), test.contents)
+			_, err := Show(repository, test.taskID)
+			assertKind(t, err, test.wantKind)
+		})
+	}
+}
+
 func TestShowKeepsPythonConstantsOutOfStrings(t *testing.T) {
 	repository := initRepository(t)
 	path := filepath.Join(repository, ".seal", "tasks", "CONSTANT-STRINGS.json")
@@ -633,6 +688,29 @@ func TestRenderRejectsUnencodableUnpairedSurrogates(t *testing.T) {
 				t.Fatalf("Render() error = %q", err)
 			}
 		})
+	}
+}
+
+func TestRenderIgnoresUnpairedSurrogateRemovedByDuplicateKey(t *testing.T) {
+	// Frozen seal-legacy at 94bb931a7934efe31549d4c21dc7153e43f27a08
+	// exits 0 and prints this exact final dict: json.load replaces the first value
+	// before json.dumps reaches the stdout encoding boundary.
+	repository := initRepository(t)
+	path := filepath.Join(repository, ".seal", "tasks", "OVERWRITTEN-SURROGATE.json")
+	mustMkdirAll(t, filepath.Dir(path))
+	mustWriteFile(t, path, `{"value":"\ud800","value":"ok"}`)
+
+	document, err := Show(repository, "OVERWRITTEN-SURROGATE")
+	if err != nil {
+		t.Fatalf("Show() error = %v", err)
+	}
+	rendered, err := Render(document)
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	want := "{\n  \"value\": \"ok\"\n}"
+	if got := string(rendered); got != want {
+		t.Fatalf("Render() = %q, want %q", got, want)
 	}
 }
 

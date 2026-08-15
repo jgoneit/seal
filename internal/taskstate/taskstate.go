@@ -41,6 +41,19 @@ type constantMarkers struct {
 	negativeInfinity string
 }
 
+type jsonDecodeFailure struct {
+	cause            error
+	numericScanLimit int
+}
+
+func (e *jsonDecodeFailure) Error() string {
+	return e.cause.Error()
+}
+
+func (e *jsonDecodeFailure) Unwrap() error {
+	return e.cause
+}
+
 // ErrorKind identifies the stable command error class used by the CLI.
 type ErrorKind uint8
 
@@ -128,6 +141,9 @@ func Show(cwd, taskID string) (Document, error) {
 	normalized, markers := replacePythonConstants(contents)
 	value, err := decodeJSONValue(normalized)
 	if err != nil {
+		if containsOversizedPythonInteger(normalized[:numericScanLimit(normalized, err)]) {
+			return Document{}, oversizedPythonInteger(taskID)
+		}
 		if isStandardJSONDepthLimit(err) {
 			return Document{}, nestingLimitFailure(
 				fmt.Sprintf("Task snapshot '%s' exceeds the supported JSON nesting depth.", taskID),
@@ -137,13 +153,7 @@ func Show(cwd, taskID string) (Document, error) {
 		return Document{}, invalidJSON(taskID, err)
 	}
 	if containsOversizedPythonInteger(contents) {
-		return Document{}, numericFailure(
-			fmt.Sprintf(
-				"Task snapshot '%s' contains a JSON integer exceeding CPython's limit of 4300 digits.",
-				taskID,
-			),
-			nil,
-		)
+		return Document{}, oversizedPythonInteger(taskID)
 	}
 	if _, ok := value.(map[string]any); !ok {
 		return Document{}, invalidInput(
@@ -153,11 +163,11 @@ func Show(cwd, taskID string) (Document, error) {
 	}
 
 	surrogateEscapeMarker := chooseSurrogateEscapeMarker(normalized)
-	rewritten, hasSurrogateEscape, hasUnencodableSurrogate := rewriteSurrogateEscapes(
+	rewritten, hasRewrittenSurrogate := rewriteSurrogateEscapes(
 		normalized,
 		surrogateEscapeMarker,
 	)
-	if hasSurrogateEscape {
+	if hasRewrittenSurrogate {
 		value, err = decodeJSONValue(rewritten)
 		if err != nil {
 			if isStandardJSONDepthLimit(err) {
@@ -181,7 +191,7 @@ func Show(cwd, taskID string) (Document, error) {
 	return Document{
 		values:                  document,
 		taskID:                  taskID,
-		hasUnencodableSurrogate: hasUnencodableSurrogate,
+		hasUnencodableSurrogate: containsUnencodableSurrogate(document, surrogateEscapeMarker),
 		surrogateEscapeMarker:   surrogateEscapeMarker,
 	}, nil
 }
@@ -214,17 +224,31 @@ func decodeJSONValue(contents []byte) (any, error) {
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
-		return nil, err
+		limit := len(contents)
+		var syntaxError *json.SyntaxError
+		if errors.As(err, &syntaxError) && syntaxError.Offset >= 0 && syntaxError.Offset < int64(limit) {
+			limit = int(syntaxError.Offset)
+		}
+		return nil, &jsonDecodeFailure{cause: err, numericScanLimit: limit}
 	}
 
+	firstValueEnd := int(decoder.InputOffset())
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
 			err = errors.New("multiple JSON values")
 		}
-		return nil, err
+		return nil, &jsonDecodeFailure{cause: err, numericScanLimit: firstValueEnd}
 	}
 	return value, nil
+}
+
+func numericScanLimit(contents []byte, err error) int {
+	var failure *jsonDecodeFailure
+	if errors.As(err, &failure) && failure.numericScanLimit >= 0 && failure.numericScanLimit <= len(contents) {
+		return failure.numericScanLimit
+	}
+	return 0
 }
 
 func isStandardJSONDepthLimit(err error) bool {
@@ -271,21 +295,27 @@ func containsOversizedPythonInteger(contents []byte) bool {
 		}
 		digitCount := index - digitsStart
 		isInteger := true
-		if index < len(contents) && contents[index] == '.' {
+		if index+1 < len(contents) && contents[index] == '.' &&
+			contents[index+1] >= '0' && contents[index+1] <= '9' {
 			isInteger = false
 			index++
 			for index < len(contents) && contents[index] >= '0' && contents[index] <= '9' {
 				index++
 			}
 		}
+		exponentStart := index
 		if index < len(contents) && (contents[index] == 'e' || contents[index] == 'E') {
-			isInteger = false
 			index++
 			if index < len(contents) && (contents[index] == '+' || contents[index] == '-') {
 				index++
 			}
-			for index < len(contents) && contents[index] >= '0' && contents[index] <= '9' {
-				index++
+			if index >= len(contents) || contents[index] < '0' || contents[index] > '9' {
+				index = exponentStart
+			} else {
+				isInteger = false
+				for index < len(contents) && contents[index] >= '0' && contents[index] <= '9' {
+					index++
+				}
 			}
 		}
 		if isInteger && digitCount > maximumDigits {
@@ -451,11 +481,10 @@ func stringsContain(values []string, substring string) bool {
 	return false
 }
 
-func rewriteSurrogateEscapes(contents []byte, marker string) ([]byte, bool, bool) {
+func rewriteSurrogateEscapes(contents []byte, marker string) ([]byte, bool) {
 	var output bytes.Buffer
 	output.Grow(len(contents))
-	hasSurrogateEscape := false
-	hasUnencodableSurrogate := false
+	hasRewrittenSurrogate := false
 	inString := false
 	for index := 0; index < len(contents); {
 		character := contents[index]
@@ -504,14 +533,14 @@ func rewriteSurrogateEscapes(contents []byte, marker string) ([]byte, bool, bool
 
 		if codeUnit >= 0xdc80 && codeUnit <= 0xdcff {
 			writeSurrogateEscapeMarker(&output, marker, byte(codeUnit-0xdc00))
-			hasSurrogateEscape = true
+			hasRewrittenSurrogate = true
 			index += 6
 			continue
 		}
 
 		if codeUnit >= 0xdc00 {
-			hasUnencodableSurrogate = true
-			output.Write(contents[index : index+6])
+			writeUnencodableSurrogateMarker(&output, marker, codeUnit)
+			hasRewrittenSurrogate = true
 			index += 6
 			continue
 		}
@@ -523,19 +552,51 @@ func rewriteSurrogateEscapes(contents []byte, marker string) ([]byte, bool, bool
 			continue
 		}
 
-		hasUnencodableSurrogate = true
-		output.Write(contents[index : index+6])
+		writeUnencodableSurrogateMarker(&output, marker, codeUnit)
+		hasRewrittenSurrogate = true
 		index += 6
 	}
-	return output.Bytes(), hasSurrogateEscape, hasUnencodableSurrogate
+	return output.Bytes(), hasRewrittenSurrogate
 }
 
 func writeSurrogateEscapeMarker(output *bytes.Buffer, marker string, value byte) {
 	const hexadecimal = "0123456789abcdef"
 	output.WriteString(marker)
+	output.WriteByte('r')
 	output.WriteByte(hexadecimal[value>>4])
 	output.WriteByte(hexadecimal[value&0x0f])
+}
+
+func writeUnencodableSurrogateMarker(output *bytes.Buffer, marker string, value uint16) {
+	const hexadecimal = "0123456789abcdef"
 	output.WriteString(marker)
+	output.WriteByte('u')
+	for shift := 12; shift >= 0; shift -= 4 {
+		output.WriteByte(hexadecimal[byte(value>>shift)&0x0f])
+	}
+}
+
+func containsUnencodableSurrogate(value any, marker string) bool {
+	if marker == "" {
+		return false
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.Contains(typed, marker+"u")
+	case map[string]any:
+		for key, entry := range typed {
+			if strings.Contains(key, marker+"u") || containsUnencodableSurrogate(entry, marker) {
+				return true
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			if containsUnencodableSurrogate(entry, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func decodeUTF16Escape(contents []byte) (uint16, bool) {
@@ -764,17 +825,16 @@ func decodeSurrogateEscapeMarker(value, marker string) (byte, int, bool) {
 	if marker == "" || !strings.HasPrefix(value, marker) {
 		return 0, 0, false
 	}
-	markerEnd := len(marker) + 2
-	if len(value) < markerEnd+len(marker) ||
-		!strings.HasPrefix(value[markerEnd:], marker) {
+	markerEnd := len(marker)
+	if len(value) < markerEnd+3 || value[markerEnd] != 'r' {
 		return 0, 0, false
 	}
-	high, highOK := hexadecimalDigit(value[len(marker)])
-	low, lowOK := hexadecimalDigit(value[len(marker)+1])
+	high, highOK := hexadecimalDigit(value[markerEnd+1])
+	low, lowOK := hexadecimalDigit(value[markerEnd+2])
 	if !highOK || !lowOK {
 		return 0, 0, false
 	}
-	return high<<4 | low, markerEnd + len(marker), true
+	return high<<4 | low, markerEnd + 3, true
 }
 
 func comparePythonStrings(left, right, surrogateEscapeMarker string) int {
@@ -893,6 +953,16 @@ func encodingFailure(message string, cause error) error {
 
 func numericFailure(message string, cause error) error {
 	return &Error{kind: NumericFailure, message: message, cause: cause}
+}
+
+func oversizedPythonInteger(taskID string) error {
+	return numericFailure(
+		fmt.Sprintf(
+			"Task snapshot '%s' contains a JSON integer exceeding CPython's limit of 4300 digits.",
+			taskID,
+		),
+		nil,
+	)
 }
 
 func nestingLimitFailure(message string, cause error) error {
