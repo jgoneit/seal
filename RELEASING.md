@@ -8,7 +8,8 @@ version at build time.
 
 A release tag must:
 
-- be an annotated Git tag whose name starts with `v`;
+- be an annotated Git tag named exactly `vMAJOR.MINOR.PATCH` or
+  `vMAJOR.MINOR.PATCH-rc.N`, where `N` starts at 1;
 - point at the exact release-preparation commit;
 - equal `v` followed by the output of `seal --version`; and
 - never be moved, deleted for reuse, or republished with different assets.
