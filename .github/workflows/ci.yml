@@ -103,6 +103,10 @@ jobs:
       - name: Run unit and integration tests
         run: go test ./...
 
+      - name: Repeat Windows installer rollback test
+        if: runner.os == 'Windows'
+        run: go test -count=10 ./installer -run '^TestInstallPowerShellFinalizer(RestoresExistingBinaryAfterSmokeFailure|RemovesCleanInstallAfterSmokeFailure)$'
+
       - name: Run process-tree tests
         run: go test -count=1 ./internal/checkrun -run '^(TestTimeoutTerminatesProcessTree|TestSuccessfulParentCleansBackgroundDescendant)$'
 

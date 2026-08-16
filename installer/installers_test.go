@@ -318,11 +318,19 @@ func TestInstallPowerShellFinalizerRestoresExistingBinaryAfterSmokeFailure(t *te
 	if err := os.WriteFile(target, original, 0o711); err != nil {
 		t.Fatal(err)
 	}
+	lockDirectory := t.TempDir()
+	lockReady := filepath.Join(lockDirectory, "ready")
+	lockDone := filepath.Join(lockDirectory, "done")
 
 	command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
 	command.Env = replaceEnvironment(
 		installerEnvironment(server.URL, localAppData),
-		map[string]string{"SEAL_TEST_POST_SMOKE_FAIL": "1"},
+		map[string]string{
+			"SEAL_TEST_DELETE_LOCK_DONE":     lockDone,
+			"SEAL_TEST_DELETE_LOCK_DURATION": "750ms",
+			"SEAL_TEST_DELETE_LOCK_READY":    lockReady,
+			"SEAL_TEST_POST_SMOKE_FAIL":      "1",
+		},
 	)
 	output, err := command.CombinedOutput()
 	if err == nil {
@@ -331,15 +339,141 @@ func TestInstallPowerShellFinalizerRestoresExistingBinaryAfterSmokeFailure(t *te
 	if !strings.Contains(string(output), "absolute-path version smoke test") {
 		t.Fatalf("install.ps1 failed outside the post-replacement smoke path:\n%s", output)
 	}
+	if strings.Contains(string(output), "rollback failed") {
+		t.Fatalf("install.ps1 did not restore the prior target:\n%s", output)
+	}
+	if _, err := os.Stat(lockReady); err != nil {
+		t.Fatalf("delete-lock fixture did not run: %v\n%s", err, output)
+	}
+	waitForFile(t, lockDone, 5*time.Second)
 
 	got, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatalf("read restored target: %v", err)
 	}
 	if !bytes.Equal(got, original) {
-		t.Fatalf("post-smoke failure changed target: got %q, want %q", got, original)
+		t.Fatalf(
+			"post-smoke failure changed target: got size %d sha256 %x, want %q\ninstaller output:\n%s",
+			len(got), sha256.Sum256(got), original, output,
+		)
 	}
 	assertNoInstallerResidue(t, installDir)
+}
+
+func TestInstallPowerShellFinalizerRemovesCleanInstallAfterSmokeFailure(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("install.ps1 requires native Windows")
+	}
+	powerShell := windowsPowerShell(t)
+	asset := "seal_1.2.3-rc.1_windows_amd64.zip"
+	archive := windowsArchive(t, windowsPostSmokeFailingBinary(t, "1.2.3-rc.1"))
+	server := releaseServer(t, installerTestTag, asset, archive, checksumLine(archive, asset))
+	localAppData := t.TempDir()
+	lockDirectory := t.TempDir()
+	lockReady := filepath.Join(lockDirectory, "ready")
+	lockDone := filepath.Join(lockDirectory, "done")
+
+	command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
+	command.Env = replaceEnvironment(
+		installerEnvironment(server.URL, localAppData),
+		map[string]string{
+			"SEAL_TEST_DELETE_LOCK_DONE":     lockDone,
+			"SEAL_TEST_DELETE_LOCK_DURATION": "750ms",
+			"SEAL_TEST_DELETE_LOCK_READY":    lockReady,
+			"SEAL_TEST_POST_SMOKE_FAIL":      "1",
+		},
+	)
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatalf("install.ps1 unexpectedly accepted failed installed smoke:\n%s", output)
+	}
+	if !strings.Contains(string(output), "absolute-path version smoke test") {
+		t.Fatalf("install.ps1 failed outside the post-replacement smoke path:\n%s", output)
+	}
+	if strings.Contains(string(output), "rollback failed") {
+		t.Fatalf("install.ps1 did not remove the failed clean install:\n%s", output)
+	}
+	if _, err := os.Stat(lockReady); err != nil {
+		t.Fatalf("delete-lock fixture did not run: %v\n%s", err, output)
+	}
+	waitForFile(t, lockDone, 5*time.Second)
+
+	installDir := filepath.Join(localAppData, "Programs", "Seal", "bin")
+	target := filepath.Join(installDir, "seal.exe")
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("failed clean install target still exists: %v", err)
+	}
+	assertNoInstallerResidue(t, installDir)
+}
+
+func TestInstallPowerShellFinalizerPreservesBackupAfterRollbackLockExhaustion(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("install.ps1 requires native Windows")
+	}
+	powerShell := windowsPowerShell(t)
+	asset := "seal_1.2.3-rc.1_windows_amd64.zip"
+	archive := windowsArchive(t, windowsPostSmokeFailingBinary(t, "1.2.3-rc.1"))
+	server := releaseServer(t, installerTestTag, asset, archive, checksumLine(archive, asset))
+	localAppData := t.TempDir()
+	installDir := filepath.Join(localAppData, "Programs", "Seal", "bin")
+	if err := os.MkdirAll(installDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(installDir, "seal.exe")
+	original := []byte("existing-seal-binary\r\n")
+	if err := os.WriteFile(target, original, 0o711); err != nil {
+		t.Fatal(err)
+	}
+	lockDirectory := t.TempDir()
+	lockReady := filepath.Join(lockDirectory, "ready")
+	lockDone := filepath.Join(lockDirectory, "done")
+
+	command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
+	command.Env = replaceEnvironment(
+		installerEnvironment(server.URL, localAppData),
+		map[string]string{
+			"SEAL_TEST_DELETE_LOCK_DONE":     lockDone,
+			"SEAL_TEST_DELETE_LOCK_DURATION": "7s",
+			"SEAL_TEST_DELETE_LOCK_READY":    lockReady,
+			"SEAL_TEST_POST_SMOKE_FAIL":      "1",
+		},
+	)
+	output, err := command.CombinedOutput()
+	if err == nil {
+		t.Fatalf("install.ps1 unexpectedly succeeded after rollback exhaustion:\n%s", output)
+	}
+	if !strings.Contains(string(output), "rollback failed; the prior binary remains at") || !strings.Contains(string(output), "0x") {
+		t.Fatalf("install.ps1 omitted rollback recovery details:\n%s", output)
+	}
+	if _, err := os.Stat(lockReady); err != nil {
+		t.Fatalf("delete-lock fixture did not run: %v\n%s", err, output)
+	}
+	waitForFile(t, lockDone, 5*time.Second)
+
+	backups, err := filepath.Glob(filepath.Join(installDir, ".seal-backup-*.tmp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("rollback exhaustion left %d backups, want 1; installer output:\n%s", len(backups), output)
+	}
+	backupBytes, err := os.ReadFile(backups[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(backupBytes, original) {
+		t.Fatalf("preserved backup changed: got %q, want %q", backupBytes, original)
+	}
+	if !strings.Contains(string(output), backups[0]) {
+		t.Fatalf("rollback diagnostic omitted backup path %q:\n%s", backups[0], output)
+	}
+	stages, err := filepath.Glob(filepath.Join(installDir, ".seal-install-*.tmp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stages) != 0 {
+		t.Fatalf("rollback exhaustion left staging files: %v", stages)
+	}
 }
 
 func unixAssetName(t *testing.T) string {
@@ -419,11 +553,40 @@ func windowsPostSmokeFailingBinary(t *testing.T, version string) []byte {
 	sourcePath := filepath.Join(temporaryDirectory, "main.go")
 	binaryPath := filepath.Join(temporaryDirectory, "seal.exe")
 	source := fmt.Sprintf(`package main
-import ("fmt"; "os"; "path/filepath"; "strings")
+import ("fmt"; "os"; "os/exec"; "path/filepath"; "strings"; "time"; "golang.org/x/sys/windows")
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--seal-hold-delete-lock" {
+		path, err := os.Executable()
+		if err != nil { os.Exit(71) }
+		path16, err := windows.UTF16PtrFromString(path)
+		if err != nil { os.Exit(71) }
+		handle, err := windows.CreateFile(path16, windows.GENERIC_READ, windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+		if err != nil { os.Exit(71) }
+		if err := os.WriteFile(os.Getenv("SEAL_TEST_DELETE_LOCK_READY"), []byte("ready\n"), 0600); err != nil { windows.CloseHandle(handle); os.Exit(71) }
+		duration, err := time.ParseDuration(os.Getenv("SEAL_TEST_DELETE_LOCK_DURATION"))
+		if err != nil { windows.CloseHandle(handle); os.Exit(71) }
+		time.Sleep(duration)
+		windows.CloseHandle(handle)
+		if err := os.WriteFile(os.Getenv("SEAL_TEST_DELETE_LOCK_DONE"), []byte("done\n"), 0600); err != nil { os.Exit(71) }
+		return
+	}
 	if len(os.Args) != 2 || os.Args[1] != "--version" { os.Exit(2) }
 	target := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Seal", "bin", "seal.exe")
-	if os.Getenv("SEAL_TEST_POST_SMOKE_FAIL") != "" && strings.EqualFold(os.Args[0], target) { os.Exit(70) }
+	if os.Getenv("SEAL_TEST_POST_SMOKE_FAIL") != "" && strings.EqualFold(os.Args[0], target) {
+		if os.Getenv("SEAL_TEST_DELETE_LOCK_READY") != "" {
+			command := exec.Command(target, "--seal-hold-delete-lock")
+			command.Env = os.Environ()
+			if err := command.Start(); err != nil { os.Exit(71) }
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				if _, err := os.Stat(os.Getenv("SEAL_TEST_DELETE_LOCK_READY")); err == nil { break }
+				if time.Now().After(deadline) { os.Exit(71) }
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err := command.Process.Release(); err != nil { os.Exit(71) }
+		}
+		os.Exit(70)
+	}
 	fmt.Println(%q)
 }
 `, version)
