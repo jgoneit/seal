@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-function Stop-SealInstaller {
+function Get-SealInstallerException {
     param([string]$Message)
-    throw [System.InvalidOperationException]::new($Message)
+    return [System.InvalidOperationException]::new($Message)
 }
 
 if ($args.Count -ne 2 -or $args[0] -cne "-Version") {
@@ -28,7 +28,7 @@ $installerExitCode = 0
 
 try {
     if ($env:OS -cne "Windows_NT") {
-        Stop-SealInstaller "this installer supports only Windows."
+        throw (Get-SealInstallerException "this installer supports only Windows.")
     }
     Add-Type -TypeDefinition @'
 using System;
@@ -64,7 +64,7 @@ public static class SealNativeSystemInfo
 }
 '@
     if ([SealNativeSystemInfo]::ProcessorArchitecture() -ne 9) {
-        Stop-SealInstaller "this installer supports only Windows amd64."
+        throw (Get-SealInstallerException "this installer supports only Windows amd64.")
     }
 
     # This override exists only so repository integration tests can use a
@@ -75,13 +75,13 @@ public static class SealNativeSystemInfo
         $env:SEAL_RELEASE_BASE_URL.TrimEnd('/')
     }
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-        Stop-SealInstaller "LOCALAPPDATA is required to select the install directory."
+        throw (Get-SealInstallerException "LOCALAPPDATA is required to select the install directory.")
     }
     $installDirectory = Join-Path $env:LOCALAPPDATA "Programs\Seal\bin"
     $isDriveAbsolute = $installDirectory -cmatch '^[A-Za-z]:[\\/]'
     $isUncAbsolute = $installDirectory -cmatch '^\\\\[^\\/]+[\\/][^\\/]+'
     if (-not $isDriveAbsolute -and -not $isUncAbsolute) {
-        Stop-SealInstaller "the install directory must be an absolute path."
+        throw (Get-SealInstallerException "the install directory must be an absolute path.")
     }
 
     $asset = "seal_${version}_windows_amd64.zip"
@@ -105,22 +105,22 @@ public static class SealNativeSystemInfo
         }
     }
     if ($checksumMatches.Count -ne 1) {
-        Stop-SealInstaller "checksums.txt must contain exactly one entry for $asset."
+        throw (Get-SealInstallerException "checksums.txt must contain exactly one entry for $asset.")
     }
     $expectedChecksum = $checksumMatches[0]
     if ($expectedChecksum -cnotmatch '^[0-9a-f]{64}$') {
-        Stop-SealInstaller "checksums.txt has an invalid SHA-256 for $asset."
+        throw (Get-SealInstallerException "checksums.txt has an invalid SHA-256 for $asset.")
     }
     $actualChecksum = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actualChecksum -cne $expectedChecksum) {
-        Stop-SealInstaller "SHA-256 mismatch for $asset."
+        throw (Get-SealInstallerException "SHA-256 mismatch for $asset.")
     }
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
     try {
         if ($archive.Entries.Count -ne 1 -or $archive.Entries[0].FullName -cne "seal.exe") {
-            Stop-SealInstaller "$asset must contain exactly one seal.exe binary."
+            throw (Get-SealInstallerException "$asset must contain exactly one seal.exe binary.")
         }
     } finally {
         $archive.Dispose()
@@ -129,7 +129,7 @@ public static class SealNativeSystemInfo
     $candidate = Join-Path $temporaryDirectory "seal.exe"
     $candidateItem = Get-Item -LiteralPath $candidate -Force
     if ($candidateItem.PSIsContainer -or (($candidateItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
-        Stop-SealInstaller "$asset does not contain a regular seal.exe binary."
+        throw (Get-SealInstallerException "$asset does not contain a regular seal.exe binary.")
     }
 
     $versionErrorPath = Join-Path $temporaryDirectory "version.err"
@@ -145,7 +145,7 @@ public static class SealNativeSystemInfo
     }
 
     if (-not (Test-RequestedVersion $candidate)) {
-        Stop-SealInstaller "$asset does not report requested version $version."
+        throw (Get-SealInstallerException "$asset does not report requested version $version.")
     }
 
     [System.IO.Directory]::CreateDirectory($installDirectory) | Out-Null
@@ -154,7 +154,7 @@ public static class SealNativeSystemInfo
     if (Test-Path -LiteralPath $target) {
         $targetItem = Get-Item -LiteralPath $target -Force
         if ($targetItem.PSIsContainer -or (($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
-            Stop-SealInstaller "$target is not a regular file."
+            throw (Get-SealInstallerException "$target is not a regular file.")
         }
     }
 
@@ -171,7 +171,7 @@ public static class SealNativeSystemInfo
     $destinationStage = $null
 
     if (-not (Test-RequestedVersion $target)) {
-        Stop-SealInstaller "the installed binary failed its absolute-path version smoke test."
+        throw (Get-SealInstallerException "the installed binary failed its absolute-path version smoke test.")
     }
 
     # This is the commit point. Until the installed absolute path has passed,
