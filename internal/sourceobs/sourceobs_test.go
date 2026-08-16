@@ -116,6 +116,40 @@ func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 	}
 }
 
+func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
+	repository, baseline := basicFixture(t)
+	context, err := resolveContext(repository.root, baseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baselineBlobs := make(map[string]blobIdentity)
+	before, err := collectSnapshotObservation(context, baselineBlobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository.write(
+		".seal/evidence/TASK/.tmp-run/checks/000-check.stdout",
+		[]byte("concurrent Evidence\n"),
+		0o600,
+	)
+	after, err := collectSnapshotObservation(context, baselineBlobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("Seal metadata changed snapshot stability:\nbefore=%#v\nafter=%#v", before, after)
+	}
+
+	repository.write("product.txt", []byte("product change\n"), 0o644)
+	changed, err := collectSnapshotObservation(context, baselineBlobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(after, changed) {
+		t.Fatal("product source mutation did not change snapshot observation")
+	}
+}
+
 func TestPhaseAPIsKeepSnapshotsBeforeLayeredChanges(t *testing.T) {
 	repository, baseline := basicFixture(t)
 	repository.write("src/base.txt", []byte("before checks\n"), 0o644)
