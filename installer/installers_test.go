@@ -32,7 +32,7 @@ func TestInstallShellCleanInstall(t *testing.T) {
 
 	homeDirectory := t.TempDir()
 	command := exec.Command("sh", repositoryPath(t, "install.sh"), "--version", installerTestTag)
-	command.Env = defaultInstallerEnvironment(server.URL, "HOME", homeDirectory)
+	command.Env = installerEnvironment(server.URL, homeDirectory)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("install.sh failed: %v\n%s", err, output)
@@ -80,7 +80,11 @@ func TestInstallShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(t *te
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			server := releaseServer(t, installerTestTag, asset, testCase.archive, testCase.checksums)
-			installDir := t.TempDir()
+			homeDirectory := t.TempDir()
+			installDir := filepath.Join(homeDirectory, ".local", "bin")
+			if err := os.MkdirAll(installDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
 			target := filepath.Join(installDir, "seal")
 			original := []byte("existing-seal-binary\n")
 			if err := os.WriteFile(target, original, 0o711); err != nil {
@@ -88,7 +92,7 @@ func TestInstallShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(t *te
 			}
 
 			command := exec.Command("sh", repositoryPath(t, "install.sh"), "--version", installerTestTag)
-			command.Env = installerEnvironment(server.URL, installDir)
+			command.Env = installerEnvironment(server.URL, homeDirectory)
 			if output, err := command.CombinedOutput(); err == nil {
 				t.Fatalf("install.sh unexpectedly succeeded:\n%s", output)
 			}
@@ -112,7 +116,11 @@ func TestInstallShellInterruptAfterReplacementRestoresExistingBinary(t *testing.
 	asset := unixAssetName(t)
 	archive := unixPostSmokeBlockingArchive(t, strings.TrimPrefix(installerTestTag, "v"))
 	server := releaseServer(t, installerTestTag, asset, archive, checksumLine(archive, asset))
-	installDir := t.TempDir()
+	homeDirectory := t.TempDir()
+	installDir := filepath.Join(homeDirectory, ".local", "bin")
+	if err := os.MkdirAll(installDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	target := filepath.Join(installDir, "seal")
 	original := []byte("existing-seal-binary\n")
 	if err := os.WriteFile(target, original, 0o711); err != nil {
@@ -124,7 +132,7 @@ func TestInstallShellInterruptAfterReplacementRestoresExistingBinary(t *testing.
 
 	command := exec.Command("sh", repositoryPath(t, "install.sh"), "--version", installerTestTag)
 	command.Env = replaceEnvironment(
-		installerEnvironment(server.URL, installDir),
+		installerEnvironment(server.URL, homeDirectory),
 		map[string]string{
 			"SEAL_TEST_POST_SMOKE_READY":   readyPath,
 			"SEAL_TEST_POST_SMOKE_RELEASE": releasePath,
@@ -184,7 +192,7 @@ func TestInstallPowerShellCleanInstall(t *testing.T) {
 
 	localAppData := t.TempDir()
 	command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
-	command.Env = defaultInstallerEnvironment(server.URL, "LOCALAPPDATA", localAppData)
+	command.Env = installerEnvironment(server.URL, localAppData)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("install.ps1 failed: %v\n%s", err, output)
@@ -233,7 +241,11 @@ func TestInstallPowerShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			server := releaseServer(t, installerTestTag, asset, testCase.archive, testCase.checksums)
-			installDir := t.TempDir()
+			localAppData := t.TempDir()
+			installDir := filepath.Join(localAppData, "Programs", "Seal", "bin")
+			if err := os.MkdirAll(installDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
 			target := filepath.Join(installDir, "seal.exe")
 			original := []byte("existing-seal-binary\r\n")
 			if err := os.WriteFile(target, original, 0o711); err != nil {
@@ -241,7 +253,7 @@ func TestInstallPowerShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(
 			}
 
 			command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
-			command.Env = installerEnvironment(server.URL, installDir)
+			command.Env = installerEnvironment(server.URL, localAppData)
 			if output, err := command.CombinedOutput(); err == nil {
 				t.Fatalf("install.ps1 unexpectedly succeeded:\n%s", output)
 			}
@@ -258,18 +270,18 @@ func TestInstallPowerShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(
 	}
 }
 
-func TestInstallPowerShellRejectsDriveRelativeDestination(t *testing.T) {
+func TestInstallPowerShellRejectsDriveRelativeLocalAppData(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("install.ps1 requires native Windows")
 	}
 	powerShell := windowsPowerShell(t)
-	for _, installDirectory := range []string{`C:relative`, `\relative`} {
-		t.Run(installDirectory, func(t *testing.T) {
+	for _, localAppData := range []string{`C:relative`, `\relative`} {
+		t.Run(localAppData, func(t *testing.T) {
 			command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
-			command.Env = installerEnvironment("http://127.0.0.1:1", installDirectory)
+			command.Env = installerEnvironment("http://127.0.0.1:1", localAppData)
 			output, err := command.CombinedOutput()
 			if err == nil {
-				t.Fatalf("install.ps1 accepted drive-relative destination %q:\n%s", installDirectory, output)
+				t.Fatalf("install.ps1 accepted drive-relative LOCALAPPDATA %q:\n%s", localAppData, output)
 			}
 			if !strings.Contains(string(output), "must be an absolute path") {
 				t.Fatalf("unexpected path rejection: %s", output)
@@ -286,7 +298,11 @@ func TestInstallPowerShellFinalizerRestoresExistingBinaryAfterSmokeFailure(t *te
 	asset := "seal_1.2.3-rc.1_windows_amd64.zip"
 	archive := windowsArchive(t, windowsPostSmokeFailingBinary(t, "1.2.3-rc.1"))
 	server := releaseServer(t, installerTestTag, asset, archive, checksumLine(archive, asset))
-	installDir := t.TempDir()
+	localAppData := t.TempDir()
+	installDir := filepath.Join(localAppData, "Programs", "Seal", "bin")
+	if err := os.MkdirAll(installDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	target := filepath.Join(installDir, "seal.exe")
 	original := []byte("existing-seal-binary\r\n")
 	if err := os.WriteFile(target, original, 0o711); err != nil {
@@ -295,7 +311,7 @@ func TestInstallPowerShellFinalizerRestoresExistingBinaryAfterSmokeFailure(t *te
 
 	command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
 	command.Env = replaceEnvironment(
-		installerEnvironment(server.URL, installDir),
+		installerEnvironment(server.URL, localAppData),
 		map[string]string{"SEAL_TEST_POST_SMOKE_FAIL": "1"},
 	)
 	output, err := command.CombinedOutput()
@@ -348,7 +364,7 @@ func unixArchive(t *testing.T, version string) []byte {
 
 func unixPostSmokeBlockingArchive(t *testing.T, version string) []byte {
 	t.Helper()
-	script := []byte("#!/bin/sh\nif [ \"$0\" = \"${SEAL_INSTALL_DIR}/seal\" ]; then\n  : >\"${SEAL_TEST_POST_SMOKE_READY}\"\n  while [ ! -e \"${SEAL_TEST_POST_SMOKE_RELEASE}\" ]; do sleep 0.01; done\nfi\nprintf '%s\\n' '" + version + "'\n")
+	script := []byte("#!/bin/sh\nif [ \"$0\" = \"${HOME}/.local/bin/seal\" ]; then\n  : >\"${SEAL_TEST_POST_SMOKE_READY}\"\n  while [ ! -e \"${SEAL_TEST_POST_SMOKE_RELEASE}\" ]; do sleep 0.01; done\nfi\nprintf '%s\\n' '" + version + "'\n")
 	var output bytes.Buffer
 	gzipWriter := gzip.NewWriter(&output)
 	tarWriter := tar.NewWriter(gzipWriter)
@@ -396,7 +412,7 @@ func windowsPostSmokeFailingBinary(t *testing.T, version string) []byte {
 import ("fmt"; "os"; "path/filepath"; "strings")
 func main() {
 	if len(os.Args) != 2 || os.Args[1] != "--version" { os.Exit(2) }
-	target := filepath.Join(os.Getenv("SEAL_INSTALL_DIR"), "seal.exe")
+	target := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Seal", "bin", "seal.exe")
 	if os.Getenv("SEAL_TEST_POST_SMOKE_FAIL") != "" && strings.EqualFold(os.Args[0], target) { os.Exit(70) }
 	fmt.Println(%q)
 }
@@ -455,28 +471,20 @@ func releaseServer(t *testing.T, tag, asset string, archive []byte, checksums st
 	return server
 }
 
-func installerEnvironment(releaseBase, installDirectory string) []string {
+func installerEnvironment(releaseBase, userLocalRoot string) []string {
+	rootKey := "HOME"
+	if runtime.GOOS == "windows" {
+		rootKey = "LOCALAPPDATA"
+	}
 	environment := make([]string, 0, len(os.Environ())+2)
 	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "SEAL_RELEASE_BASE_URL=") || strings.HasPrefix(entry, "SEAL_INSTALL_DIR=") {
+		name, _, found := strings.Cut(entry, "=")
+		if found && (strings.EqualFold(name, "SEAL_RELEASE_BASE_URL") || strings.EqualFold(name, rootKey)) {
 			continue
 		}
 		environment = append(environment, entry)
 	}
-	return append(environment, "SEAL_RELEASE_BASE_URL="+releaseBase, "SEAL_INSTALL_DIR="+installDirectory)
-}
-
-func defaultInstallerEnvironment(releaseBase, homeKey, homeDirectory string) []string {
-	environment := installerEnvironment(releaseBase, "")
-	prefix := strings.ToUpper(homeKey) + "="
-	filtered := environment[:0]
-	for _, entry := range environment {
-		if strings.HasPrefix(strings.ToUpper(entry), prefix) {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return append(filtered, homeKey+"="+homeDirectory)
+	return append(environment, "SEAL_RELEASE_BASE_URL="+releaseBase, rootKey+"="+userLocalRoot)
 }
 
 func replaceEnvironment(environment []string, replacements map[string]string) []string {
