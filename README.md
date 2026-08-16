@@ -78,9 +78,9 @@ fixed Basic Acceptance gates, and atomically records or reuses an immutable v2
 `completion.json`. Only `verifier.required=false` is supported for Completion;
 `verifier.required=true` returns exit 7, and Verdict files are not inputs.
 
-Seal does not implement Bundle, Verdict, Reviewer, or installer behavior. It
-does not infer a latest identity, retry, repair, rerun checks during Completion,
-or invoke another Toolkit module, and it has no `.harness` fallback.
+Seal does not implement Bundle, Verdict, or Reviewer behavior. It does not
+infer a latest identity, retry, repair, rerun checks during Completion, or
+invoke another Toolkit module, and it has no `.harness` fallback.
 
 To exercise the candidate from a Go checkout:
 
@@ -94,9 +94,63 @@ go run ./cmd/seal run show <TASK_ID> --run-id <RUN_ID>
 go run ./cmd/seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
-There is no release asset or installer yet. The long-term distribution target
-is a standalone `seal` binary that does not require users to install Python or
-the Go toolchain.
+## Distribution
+
+Tagged releases contain exactly five native archives plus a sorted
+`checksums.txt`:
+
+```text
+seal_<VERSION>_linux_amd64.tar.gz
+seal_<VERSION>_linux_arm64.tar.gz
+seal_<VERSION>_darwin_amd64.tar.gz
+seal_<VERSION>_darwin_arm64.tar.gz
+seal_<VERSION>_windows_amd64.zip
+checksums.txt
+```
+
+Each archive contains one standalone `seal` binary. Python and the Go toolchain
+are not runtime dependencies. Git must already be installed when Seal evaluates
+a repository.
+
+For a published Linux or macOS release, download the installer from the same
+tag and pass that exact tag explicitly:
+
+```bash
+tag=v0.3.0-rc.1
+installer="$(mktemp "${TMPDIR:-/tmp}/seal-install.XXXXXX")"
+trap 'rm -f -- "${installer}"' EXIT
+curl -fsSL "https://raw.githubusercontent.com/jgoneit/seal/${tag}/install.sh" \
+  -o "${installer}"
+sh "${installer}" --version "${tag}"
+```
+
+The default target is `$HOME/.local/bin/seal`. The installer downloads only the
+requested tag's native archive and checksum file, requires exactly one matching
+SHA-256 entry, validates the archive shape and embedded binary version, then
+smoke-tests the absolute installed path. It reports when the target directory
+is not on `PATH`.
+
+For a published Windows amd64 release, use Windows PowerShell:
+
+```powershell
+$Tag = "v0.3.0-rc.1"
+$Installer = Join-Path ([IO.Path]::GetTempPath()) ("seal-install-" + [Guid]::NewGuid().ToString("N") + ".ps1")
+try {
+    Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/jgoneit/seal/$Tag/install.ps1" -OutFile $Installer
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Installer -Version $Tag
+} finally {
+    Remove-Item -LiteralPath $Installer -Force -ErrorAction SilentlyContinue
+}
+```
+
+The default Windows target is
+`$LOCALAPPDATA\Programs\Seal\bin\seal.exe`. Neither installer uses `sudo`,
+edits a shell profile, enables auto-update, installs Git, or makes a Seal
+Acceptance decision. A download, checksum, archive, or version failure leaves
+an existing target unchanged. Releases provide checksums but no signatures or
+attestations.
+
+See [RELEASING.md](RELEASING.md) for the native build and publication contract.
 
 ## Conformance-first development
 
