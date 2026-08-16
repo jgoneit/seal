@@ -111,7 +111,22 @@ public static class SealNativeSystemInfo
     if ($expectedChecksum -cnotmatch '^[0-9a-f]{64}$') {
         throw (Get-SealInstallerException "checksums.txt has an invalid SHA-256 for $asset.")
     }
-    $actualChecksum = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $archiveStream = [System.IO.File]::OpenRead($archivePath)
+        try {
+            $hashBytes = $sha256.ComputeHash($archiveStream)
+        } finally {
+            $archiveStream.Dispose()
+        }
+    } finally {
+        $sha256.Dispose()
+    }
+    $checksumBuilder = [System.Text.StringBuilder]::new(64)
+    foreach ($hashByte in $hashBytes) {
+        [void]$checksumBuilder.Append($hashByte.ToString("x2", [System.Globalization.CultureInfo]::InvariantCulture))
+    }
+    $actualChecksum = $checksumBuilder.ToString()
     if ($actualChecksum -cne $expectedChecksum) {
         throw (Get-SealInstallerException "SHA-256 mismatch for $asset.")
     }
