@@ -173,14 +173,10 @@ if ! matches_requested_version "$candidate"; then
   fail "$asset does not report requested version $version."
 fi
 
-if [ -n "${SEAL_INSTALL_DIR:-}" ]; then
-  install_dir=$SEAL_INSTALL_DIR
-else
-  if [ -z "${HOME:-}" ]; then
-    fail 'HOME is required to select the default install directory.'
-  fi
-  install_dir=$HOME/.local/bin
+if [ -z "${HOME:-}" ]; then
+  fail 'HOME is required to select the install directory.'
 fi
+install_dir=$HOME/.local/bin
 case "$install_dir" in
   /*) ;;
   *) fail 'the install directory must be an absolute path.' ;;

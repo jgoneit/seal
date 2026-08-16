@@ -67,21 +67,17 @@ public static class SealNativeSystemInfo
         Stop-SealInstaller "this installer supports only Windows amd64."
     }
 
-    # These overrides exist only so repository integration tests can use a
-    # local release server and an isolated destination.
+    # This override exists only so repository integration tests can use a
+    # local release server.
     $releaseBase = if ([string]::IsNullOrWhiteSpace($env:SEAL_RELEASE_BASE_URL)) {
         "https://github.com/jgoneit/seal/releases/download"
     } else {
         $env:SEAL_RELEASE_BASE_URL.TrimEnd('/')
     }
-    $installDirectory = if ([string]::IsNullOrWhiteSpace($env:SEAL_INSTALL_DIR)) {
-        if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-            Stop-SealInstaller "LOCALAPPDATA is required to select the default install directory."
-        }
-        Join-Path $env:LOCALAPPDATA "Programs\Seal\bin"
-    } else {
-        $env:SEAL_INSTALL_DIR
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        Stop-SealInstaller "LOCALAPPDATA is required to select the install directory."
     }
+    $installDirectory = Join-Path $env:LOCALAPPDATA "Programs\Seal\bin"
     $isDriveAbsolute = $installDirectory -cmatch '^[A-Za-z]:[\\/]'
     $isUncAbsolute = $installDirectory -cmatch '^\\\\[^\\/]+[\\/][^\\/]+'
     if (-not $isDriveAbsolute -and -not $isUncAbsolute) {
