@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -112,6 +113,59 @@ func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 	}
 	if !bytes.Equal(unstaged.SnapshotJSON(), staged.SnapshotJSON()) || !bytes.Equal(staged.SnapshotJSON(), committed.SnapshotJSON()) {
 		t.Fatalf("snapshot identity changed across layers:\nunstaged=%s\nstaged=%s\ncommitted=%s", unstaged.SnapshotJSON(), staged.SnapshotJSON(), committed.SnapshotJSON())
+	}
+}
+
+func TestPhaseAPIsKeepSnapshotsBeforeLayeredChanges(t *testing.T) {
+	repository, baseline := basicFixture(t)
+	repository.write("src/base.txt", []byte("before checks\n"), 0o644)
+
+	s0, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	if err != nil {
+		t.Fatalf("ObserveSnapshot(S0) error = %v", err)
+	}
+	if _, exposed := reflect.TypeOf(s0).MethodByName("Changes"); exposed {
+		t.Fatal("SnapshotResult exposes layered changes")
+	}
+	if _, exposed := reflect.TypeOf(s0).MethodByName("DiffPatch"); exposed {
+		t.Fatal("SnapshotResult exposes a raw diff")
+	}
+	s0Bytes := s0.SnapshotJSON()
+	s0Bytes[0] = 'x'
+	if s0.SnapshotJSON()[0] == 'x' {
+		t.Fatal("SnapshotResult exposes artifact byte storage")
+	}
+
+	// Simulate source mutation by checks between the required S0 and S1 calls.
+	repository.write("src/base.txt", []byte("after checks\n"), 0o644)
+	s1, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	if err != nil {
+		t.Fatalf("ObserveSnapshot(S1) error = %v", err)
+	}
+	if bytes.Equal(s0.SnapshotJSON(), s1.SnapshotJSON()) {
+		t.Fatal("S0 and S1 snapshots did not detect changed final source")
+	}
+
+	changes, err := ObserveChanges(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	if err != nil {
+		t.Fatalf("ObserveChanges(post-S1) error = %v", err)
+	}
+	if _, exposed := reflect.TypeOf(changes).MethodByName("Snapshot"); exposed {
+		t.Fatal("ChangeResult exposes a Source Snapshot")
+	}
+	changeModel := changes.Changes()
+	changeModel.Scope[0] = "mutated"
+	if changes.Changes().Scope[0] != "src" {
+		t.Fatal("ChangeResult exposes model storage")
+	}
+	findChange(t, changes.Changes().Changes, "unstaged", "modified", "src/base.txt")
+	if !bytes.Contains(changes.DiffPatch(), []byte("after checks")) {
+		t.Fatalf("post-S1 diff does not contain final bytes:\n%s", changes.DiffPatch())
+	}
+	if _, err := ObserveChanges(Request{CWD: repository.root, Baseline: baseline}); err == nil {
+		t.Fatal("ObserveChanges without Scope succeeded")
+	} else {
+		assertErrorKind(t, err, InvalidRequest, "scope")
 	}
 }
 
