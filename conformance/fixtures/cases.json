@@ -1,0 +1,2508 @@
+{
+  "base_fixture": {
+    "origin_kind": "Reference CLI-generated valid Evidence Run at the frozen commit",
+    "origin_path": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a",
+    "path": "conformance/fixtures/base-pass",
+    "reference_validation": {
+      "git_status_before_after_equal_and_clean": true,
+      "run_command": "seal-legacy run show SL-CONFIG-TEST-ISOLATION-001 --run-id 58afd1bb1b4d4e8397aaabff53a6ae7a",
+      "run_evidence_sha256": "68443492cc30f09c4517d2c74d1fbc7bd27945b703b674cc588830b933e2c516",
+      "run_exit_code": 0,
+      "seal_file_set_size_sha256_before_after_equal": true,
+      "stderr_empty": true,
+      "task_command": "seal-legacy task show SL-CONFIG-TEST-ISOLATION-001",
+      "task_exit_code": 0
+    },
+    "sanitization_and_minimization": [
+      "retained the first normalized check only in both Task copies and checks.json",
+      "removed product changes and Source Snapshot entries",
+      "replaced diff and check logs with empty bytes",
+      "replaced the absolute checks.json cwd with <repository>",
+      "recomputed both Source Snapshot digests and the raw-byte Run manifest",
+      "re-ran the frozen Reference run show command and observed exit 0"
+    ],
+    "sha256": {
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json": "fbecd7bdd0fe232d900140804d16abfcb64386efa459865433fee38e6cfc301e",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json": "c0059cdcb836e750dd8e7cd4d1cb102837f0482b618fd0b020ea9b7688baf72f",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/diff.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json": "e8e5f528e219ab60957531228c9c90a7eca7ba738bdae9170d515470bb7413a6",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json": "73d68fa4ade73eb2d0840d03fa66f3d2d62df131c1e618c6b001053534b61b38",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-before-checks.json": "73d68fa4ade73eb2d0840d03fa66f3d2d62df131c1e618c6b001053534b61b38",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json": "6b6d784687ff3937b34d6b4b12fc796069842e67c14f7aff13c528ec6316f792",
+      ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json": "f63014aa355a826d93520f58d6b40b633d8ff9c6badb4f3c2ddfe76cc097ed28",
+      ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json": "6b6d784687ff3937b34d6b4b12fc796069842e67c14f7aff13c528ec6316f792"
+    }
+  },
+  "cases": [
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "identity_evidence_task_mismatch",
+      "group": "identity",
+      "id": "identity_evidence_task_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "op": "set",
+          "pointer": "/id",
+          "value": "OTHER"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "identity_manifest_run_mismatch",
+      "group": "identity",
+      "id": "identity_manifest_run_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "op": "set",
+          "pointer": "/run_id",
+          "value": "OTHER"
+        }
+      ],
+      "note": "Manifest identity contradictions are Evidence corruption, unlike Task/document identity contradictions.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "identity_manifest_task_mismatch",
+      "group": "identity",
+      "id": "identity_manifest_task_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "op": "set",
+          "pointer": "/task_id",
+          "value": "OTHER"
+        }
+      ],
+      "note": "Manifest identity contradictions are Evidence corruption, unlike Task/document identity contradictions.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "identity_saved_task_mismatch",
+      "group": "identity",
+      "id": "identity_saved_task_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "set",
+          "pointer": "/id",
+          "value": "OTHER"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "identity_verification_run_mismatch",
+      "group": "identity",
+      "id": "identity_verification_run_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/run_id",
+          "value": "OTHER"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "identity_verification_task_mismatch",
+      "group": "identity",
+      "id": "identity_verification_task_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/task_id",
+          "value": "OTHER"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_absolute_evidence_path",
+      "group": "integrity",
+      "id": "integrity_absolute_evidence_path",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/evidence_files/0",
+          "value": "/outside"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_baseline_mismatch",
+      "group": "integrity",
+      "id": "integrity_baseline_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/baseline",
+          "value": "0000000000000000000000000000000000000000"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_checks_tamper",
+      "group": "integrity",
+      "id": "integrity_checks_tamper",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/passed",
+          "value": false
+        }
+      ],
+      "note": "Manifest intentionally not rebuilt; document consistency fails first.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_duplicate_evidence_path",
+      "group": "integrity",
+      "id": "integrity_duplicate_evidence_path",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "append",
+          "pointer": "/evidence_files",
+          "value": "task.json"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_evidence_sha_mismatch",
+      "group": "integrity",
+      "id": "integrity_evidence_sha_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "op": "set",
+          "pointer": "/evidence_sha256",
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_extra_listed_file",
+      "group": "integrity",
+      "id": "integrity_extra_listed_file",
+      "layout_delta": [
+        "extra.bin is listed in verification and manifest"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/extra.bin",
+          "op": "write_utf8",
+          "value": "extra"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "append",
+          "pointer": "/evidence_files",
+          "value": "extra.bin"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "The exact logical mechanical file set rejects a listed extra path.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_extra_unlisted_physical_file",
+      "group": "frozen-limitation",
+      "id": "integrity_extra_unlisted_physical_file",
+      "layout_delta": [
+        "extra.bin exists physically but is absent from verification evidence_files and manifest"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/extra.bin",
+          "op": "write_utf8",
+          "value": "extra"
+        }
+      ],
+      "note": "Frozen Reference ignores unlisted physical files and returns the unchanged valid summary.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_malformed_run_json",
+      "group": "integrity",
+      "id": "integrity_malformed_run_json",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "write_utf8",
+          "value": "{\n"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_manifest_hash_mismatch",
+      "group": "integrity",
+      "id": "integrity_manifest_hash_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "op": "set",
+          "pointer": "/files/0/sha256",
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_manifest_size_mismatch",
+      "group": "integrity",
+      "id": "integrity_manifest_size_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "op": "set",
+          "pointer": "/files/0/size_bytes",
+          "value": 158
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_mechanical_result_tamper",
+      "group": "integrity",
+      "id": "integrity_mechanical_result_tamper",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_missing_expected_file",
+      "group": "integrity",
+      "id": "integrity_missing_expected_file",
+      "layout_delta": [
+        "manifest-listed diff.patch is absent"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/diff.patch",
+          "op": "delete"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_scope_aggregate_tamper",
+      "group": "integrity",
+      "id": "integrity_scope_aggregate_tamper",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/scope_pass",
+          "value": false
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_source_digest_record_mismatch",
+      "group": "integrity",
+      "id": "integrity_source_digest_record_mismatch",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/source_after_checks_sha256",
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_source_snapshot_tamper",
+      "group": "integrity",
+      "id": "integrity_source_snapshot_tamper",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json",
+          "op": "set",
+          "pointer": "/snapshot_sha256",
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_unsafe_evidence_path",
+      "group": "integrity",
+      "id": "integrity_unsafe_evidence_path",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/evidence_files/0",
+          "value": "../outside"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_unsupported_verification_version",
+      "group": "integrity",
+      "id": "integrity_unsupported_verification_version",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/schema_version",
+          "value": 99
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "integrity_verification_aggregate_tamper",
+      "group": "integrity",
+      "id": "integrity_verification_aggregate_tamper",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/required_checks_pass",
+          "value": false
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_binary_file",
+      "group": "run-valid",
+      "id": "run_binary_file",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": true,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": true,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_check_launch_failure",
+      "group": "run-valid",
+      "id": "run_check_launch_failure",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/exit_code",
+          "value": null
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/passed",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/required_checks_pass",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "Manifest is rebuilt so this is valid stored state, not tamper.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_saved_task_integer_before_syntax",
+      "group": "run-number-compatibility",
+      "id": "run_saved_task_integer_before_syntax",
+      "layout_delta": [
+        "saved Task contains a positive 4301-digit decimal integer before a later JSON syntax error"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_repeated_utf8",
+          "prefix": "{\"compat_number\":",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          },
+          "suffix": ",}\n"
+        }
+      ],
+      "note": "CPython raises ValueError for the oversized integer before reporting the later trailing-comma syntax error.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_saved_task_invalid_raw_utf8",
+      "group": "run-raw-bytes",
+      "id": "run_saved_task_invalid_raw_utf8",
+      "layout_delta": [
+        "saved Task contains raw ff inside a JSON string before Run validation"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "hex": "7b2276616c7565223a22ff227d0a",
+          "op": "write_bytes_hex"
+        }
+      ],
+      "note": "Run validation catches the Unicode decoding failure at the saved Task boundary and maps it to the frozen invalid-input result.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_deleted_file",
+      "group": "run-valid",
+      "id": "run_deleted_file",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": null,
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "deleted"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": null,
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "deleted"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_artifact_values": {
+        "generated_manifest_evidence_sha256": "8c8d2d6657a4c39905cd92185224f264217f118390f6d2613d73ba5ff6581220"
+      },
+      "expected_result": "run_evidence_task_integer_before_syntax",
+      "group": "run-number-compatibility",
+      "id": "run_evidence_task_integer_before_syntax",
+      "layout_delta": [
+        "Evidence task.json contains a positive 4301-digit decimal integer before a later JSON syntax error"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "op": "write_repeated_utf8",
+          "prefix": "{\"compat_number\":",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          },
+          "suffix": ",}\n"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "CPython raises ValueError for the oversized integer before reporting the later trailing-comma syntax error.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "bad/id"
+      ],
+      "expected_result": "run_invalid_run_id",
+      "group": "run-errors",
+      "id": "run_invalid_run_id",
+      "layout_delta": [
+        "unsafe Run identity"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "bad/id",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_invalid_task_id",
+      "group": "run-errors",
+      "id": "run_invalid_task_id",
+      "layout_delta": [
+        "unsafe Task identity"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "MISSING-RUN"
+      ],
+      "expected_result": "run_missing",
+      "group": "run-errors",
+      "id": "run_missing",
+      "layout_delta": [
+        "no matching Run directory"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_mode_change",
+      "group": "run-valid",
+      "id": "run_mode_change",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": true,
+              "new_mode": "100755",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": true,
+              "new_mode": "100755",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_optional_check_failure",
+      "group": "run-valid",
+      "id": "run_optional_check_failure",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "set",
+          "pointer": "/checks/0/required",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "op": "set",
+          "pointer": "/checks/0/required",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/required",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/exit_code",
+          "value": 1
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/passed",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/required_checks_pass",
+          "value": true
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "pass"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "Manifest is rebuilt so this is valid stored state, not tamper.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_regular_file",
+      "group": "run-valid",
+      "id": "run_regular_file",
+      "layout_delta": [],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_renamed_file",
+      "group": "run-valid",
+      "id": "run_renamed_file",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "set",
+          "pointer": "/scope/0",
+          "value": "tests"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "op": "set",
+          "pointer": "/scope/0",
+          "value": "tests"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/scope/0",
+          "value": "tests"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": "tests/old.py",
+              "source": "unstaged",
+              "status": "renamed"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": "tests/old.py",
+              "source": "unstaged",
+              "status": "renamed"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": null,
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_repository_missing",
+      "group": "repository",
+      "id": "run_repository_missing",
+      "layout_delta": [
+        "execute from a directory with no enclosing .git"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_required_check_failure",
+      "group": "run-valid",
+      "id": "run_required_check_failure",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/exit_code",
+          "value": 1
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/passed",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/required_checks_pass",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "Manifest is rebuilt so this is valid stored state, not tamper.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_required_timeout",
+      "group": "run-valid",
+      "id": "run_required_timeout",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/exit_code",
+          "value": 1
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/timed_out",
+          "value": true
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks.json",
+          "op": "set",
+          "pointer": "/checks/0/passed",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/required_checks_pass",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "Manifest is rebuilt so this is valid stored state, not tamper.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_scope_violation",
+      "group": "run-valid",
+      "id": "run_scope_violation",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": false,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "README.md",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": false,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "README.md",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/scope_violations",
+          "value": [
+            {
+              "in_scope": false,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "README.md",
+              "previous_path": null,
+              "source": "unstaged",
+              "status": "modified"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/scope_pass",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_source_instability",
+      "group": "run-valid",
+      "id": "run_source_instability",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json",
+          "op": "set",
+          "pointer": "/entries",
+          "value": [
+            {
+              "mode": "100644",
+              "path": "product.txt",
+              "sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+              "size_bytes": 1,
+              "state": "present"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json",
+          "op": "recompute_snapshot_sha256"
+        },
+        {
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json#/snapshot_sha256",
+          "op": "copy_value",
+          "to": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/source_after_checks_sha256"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/source_stable_during_checks",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_artifact_values": {
+        "evidence_sha256": "402511d7c91beee75d2157228065b5235befc0403e698d635d64c07e8360f36d",
+        "source_after_checks_sha256": "6937466be047f7a5f29ee464d18ab82bacf5560a9eac173468bebd26e818ef2b",
+        "source_before_checks_sha256": "6937466be047f7a5f29ee464d18ab82bacf5560a9eac173468bebd26e818ef2b"
+      },
+      "expected_result": "run_surrogateescape_dcff_scope_violation",
+      "group": "run-raw-bytes",
+      "id": "run_surrogateescape_dcff_scope_violation",
+      "layout_delta": [
+        "identical changed-files and verification records contain escaped U+DCFF path",
+        "both Source Snapshots contain the identical escaped U+DCFF present entry"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": false,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": null,
+              "path": "docs/\udcff",
+              "previous_path": null,
+              "source": "untracked",
+              "status": "untracked"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-before-checks.json",
+          "op": "set",
+          "pointer": "/entries",
+          "value": [
+            {
+              "mode": "100644",
+              "path": "docs/\udcff",
+              "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "size_bytes": 1,
+              "state": "present"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-before-checks.json",
+          "op": "recompute_snapshot_sha256"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json",
+          "op": "set",
+          "pointer": "/entries",
+          "value": [
+            {
+              "mode": "100644",
+              "path": "docs/\udcff",
+              "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "size_bytes": 1,
+              "state": "present"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json",
+          "op": "recompute_snapshot_sha256"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": false,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": null,
+              "path": "docs/\udcff",
+              "previous_path": null,
+              "source": "untracked",
+              "status": "untracked"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/scope_violations",
+          "value": [
+            {
+              "in_scope": false,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": null,
+              "path": "docs/\udcff",
+              "previous_path": null,
+              "source": "untracked",
+              "status": "untracked"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/scope_pass",
+          "value": false
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/mechanical_result",
+          "value": "fail"
+        },
+        {
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-before-checks.json#/snapshot_sha256",
+          "op": "copy_value",
+          "to": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/source_before_checks_sha256"
+        },
+        {
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/source-after-checks.json#/snapshot_sha256",
+          "op": "copy_value",
+          "to": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/source_after_checks_sha256"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "Frozen stdout restores U+DCFF to raw byte ff in the projected Scope violation path.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_task_confined_symlink",
+      "group": "run-task-symlink",
+      "id": "run_task_confined_symlink",
+      "layout_delta": [
+        "saved Task symlink resolves to the identical Run task.json inside repository"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "symlink",
+          "target": "../evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_task_external_symlink",
+      "group": "run-task-symlink",
+      "id": "run_task_external_symlink",
+      "layout_delta": [
+        "saved Task symlink resolves to identical regular JSON outside repository"
+      ],
+      "mutations": [
+        {
+          "from": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "copy_outside_repository",
+          "target": "<outside>/task.json"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "symlink",
+          "target": "<outside>/task.json"
+        }
+      ],
+      "note": "Frozen security limitation: run show follows this Task symlink before validating Run documents.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_artifact_values": {
+        "generated_manifest_evidence_sha256": "170a2ff4541853446ecc1075a366b8dbae032f40ce13097c4b0770fe0ee41296"
+      },
+      "expected_result": "run_task_integer_digit_limit",
+      "group": "run-number-compatibility",
+      "id": "run_task_integer_digit_limit",
+      "layout_delta": [
+        "saved and Evidence Task contain byte-identical positive 4301-digit decimal integers"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "set_raw_number",
+          "pointer": "/compat_number",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          }
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "op": "set_raw_number",
+          "pointer": "/compat_number",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          }
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "The manifest is rebuilt, but CPython fails while decoding the saved Task before Run validation reaches it.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_task_large_int_float_mismatch",
+      "group": "run-number-compatibility",
+      "id": "run_task_large_int_float_mismatch",
+      "layout_delta": [
+        "saved integer remains exact while Evidence float rounds and compares unequal under Python semantics"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "literal": "9007199254740993",
+          "op": "set_raw_number",
+          "pointer": "/compat_number"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "literal": "9007199254740993.0",
+          "op": "set_raw_number",
+          "pointer": "/compat_number"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_task_number_float_rounding_equal",
+      "group": "run-number-compatibility",
+      "id": "run_task_number_float_rounding_equal",
+      "layout_delta": [
+        "saved and Evidence Task bytes differ while Python-decoded float values compare equal"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "literal": "0.1",
+          "op": "set_raw_number",
+          "pointer": "/compat_number"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "literal": "0.10000000000000001",
+          "op": "set_raw_number",
+          "pointer": "/compat_number"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_untracked_file",
+      "group": "run-valid",
+      "id": "run_untracked_file",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/changed-files.json",
+          "op": "set",
+          "pointer": "/changes",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "untracked",
+              "status": "untracked"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json",
+          "op": "set",
+          "pointer": "/changed_files",
+          "value": [
+            {
+              "in_scope": true,
+              "is_binary": false,
+              "mode_changed": false,
+              "new_mode": "100644",
+              "old_mode": "100644",
+              "path": "tests/test_codex_permissions.py",
+              "previous_path": null,
+              "source": "untracked",
+              "status": "untracked"
+            }
+          ]
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_evidence_broken",
+      "group": "symlink",
+      "id": "symlink_evidence_broken",
+      "layout_delta": [
+        "stderr symlink target is absent"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "symlink",
+          "target": "missing.log"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_evidence_confined_regular_target",
+      "group": "symlink",
+      "id": "symlink_evidence_confined_regular_target",
+      "layout_delta": [
+        "stderr symlink resolves to an empty manifest-listed regular file inside the same Run"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "symlink",
+          "target": "000-contract-sync-a58dc509ede1.stdout"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_evidence_loop",
+      "group": "symlink",
+      "id": "symlink_evidence_loop",
+      "layout_delta": [
+        "stdout and stderr symlinks form a loop"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stdout",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "symlink",
+          "target": "000-contract-sync-a58dc509ede1.stdout"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stdout",
+          "op": "symlink",
+          "target": "000-contract-sync-a58dc509ede1.stderr"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_evidence_outside_escape",
+      "group": "symlink",
+      "id": "symlink_evidence_outside_escape",
+      "layout_delta": [
+        "stderr symlink resolves outside the Run/repository"
+      ],
+      "mutations": [
+        {
+          "file": "<outside>/empty.log",
+          "op": "write_utf8",
+          "value": ""
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "symlink",
+          "target": "<outside>/empty.log"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_evidence_target_manifest_mismatch",
+      "group": "symlink",
+      "id": "symlink_evidence_target_manifest_mismatch",
+      "layout_delta": [
+        "confined symlink reaches a regular file inside the Run, but target bytes differ from the manifest record"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "symlink",
+          "target": "../task.json"
+        }
+      ],
+      "note": "Confinement passes; raw-byte manifest size validation rejects.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_evidence_task_directory_confined",
+      "group": "symlink",
+      "id": "symlink_evidence_task_directory_confined",
+      "layout_delta": [
+        ".seal/evidence/<task> ancestor itself is a confined symlink"
+      ],
+      "mutations": [
+        {
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001",
+          "op": "rename",
+          "to": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001-target"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001",
+          "op": "symlink",
+          "target": "SL-CONFIG-TEST-ISOLATION-001-target"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_run_directory_confined",
+      "group": "symlink",
+      "id": "symlink_run_directory_confined",
+      "layout_delta": [
+        "logical Run directory itself is a symlink to a directory inside .seal/evidence/<task>"
+      ],
+      "mutations": [
+        {
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a",
+          "op": "rename",
+          "to": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a-target"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a",
+          "op": "symlink",
+          "target": "58afd1bb1b4d4e8397aaabff53a6ae7a-target"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "symlink_unexpected_file_type",
+      "group": "symlink",
+      "id": "symlink_unexpected_file_type",
+      "layout_delta": [
+        "manifest path resolves to a directory rather than a regular file"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr",
+          "op": "delete"
+        },
+        {
+          "op": "mkdir",
+          "path": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/checks/000-contract-sync-a58dc509ede1.stderr"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_broken_symlink",
+      "group": "task-symlink",
+      "id": "task_broken_symlink",
+      "layout_delta": [
+        "saved Task symlink target does not exist"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "symlink",
+          "target": "missing.json"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_confined_symlink",
+      "group": "task-symlink",
+      "id": "task_confined_symlink",
+      "layout_delta": [
+        "saved Task symlink resolves to regular task.json inside repository"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "symlink",
+          "target": "../evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_external_symlink",
+      "group": "task-symlink",
+      "id": "task_external_symlink",
+      "layout_delta": [
+        "saved Task symlink resolves to regular JSON outside repository"
+      ],
+      "mutations": [
+        {
+          "from": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "copy_outside_repository",
+          "target": "<outside>/task.json"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "symlink",
+          "target": "<outside>/task.json"
+        }
+      ],
+      "note": "Frozen security limitation: task show follows the external symlink.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_integer_digit_limit",
+      "group": "task-show-raw-bytes",
+      "id": "task_integer_digit_limit",
+      "layout_delta": [
+        "saved Task is one JSON object containing one positive 4301-digit decimal integer"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_json",
+          "value": {
+            "value": 0
+          }
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "set_raw_number",
+          "pointer": "/value",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          }
+        }
+      ],
+      "note": "CPython raises ValueError before task show can render stdout.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "bad/id"
+      ],
+      "expected_result": "task_invalid_id",
+      "group": "task-show",
+      "id": "task_invalid_id",
+      "layout_delta": [
+        "unsafe separator occurs in CLI identity; no path lookup is allowed"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_invalid_raw_utf8",
+      "group": "task-show-raw-bytes",
+      "id": "task_invalid_raw_utf8",
+      "layout_delta": [
+        "saved Task contains raw ff inside a JSON string rather than an ASCII surrogate escape"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "hex": "7b2276616c7565223a22ff227d0a",
+          "op": "write_bytes_hex"
+        }
+      ],
+      "note": "The UnicodeDecodeError escapes the handled CLI boundary, so exit 1 and empty stdout are frozen behavior.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_malformed_json",
+      "group": "task-show",
+      "id": "task_malformed_json",
+      "layout_delta": [
+        "saved Task contains malformed JSON"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_utf8",
+          "value": "{\n"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "MISSING-TASK"
+      ],
+      "expected_result": "task_missing",
+      "group": "task-show",
+      "id": "task_missing",
+      "layout_delta": [
+        "no .seal/tasks/MISSING-TASK.json"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_non_object_json",
+      "group": "task-show",
+      "id": "task_non_object_json",
+      "layout_delta": [],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_json",
+          "value": []
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_normalized",
+      "group": "task-show",
+      "id": "task_normalized",
+      "layout_delta": [],
+      "mutations": [],
+      "note": "Normalized stored Task object returned as one JSON object.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_numeric_normalization",
+      "group": "task-show-raw-bytes",
+      "id": "task_numeric_normalization",
+      "layout_delta": [
+        "saved Task contains Python JSON numeric spellings whose rendered forms differ"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_utf8",
+          "value": "{\"numbers\":[-0,1.2300e+02,1e400]}\n"
+        }
+      ],
+      "note": "Frozen output contains the Python-only Infinity token; raw stdout is authoritative.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": null,
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_repository_missing",
+      "group": "repository",
+      "id": "task_repository_missing",
+      "layout_delta": [
+        "execute from a directory with no enclosing .git"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_saved_field_contradiction",
+      "group": "task-show",
+      "id": "task_saved_field_contradiction",
+      "layout_delta": [
+        "stored id and baseline contradict requested identity and accepted baseline syntax"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_json",
+          "value": {
+            "baseline": "not-a-commit",
+            "id": "DIFFERENT",
+            "schema_version": 1
+          }
+        }
+      ],
+      "note": "task show still returns the raw object; this is not Acceptance eligibility.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_schema_invalid_object",
+      "group": "task-show",
+      "id": "task_schema_invalid_object",
+      "layout_delta": [
+        "saved Task is a syntactically valid object that violates task.schema.json"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_json",
+          "value": {
+            "id": "DIFFERENT",
+            "schema_version": 99,
+            "unexpected": true
+          }
+        }
+      ],
+      "note": "task show does not apply create-input schema validation.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_surrogateescape_dcff",
+      "group": "task-show-raw-bytes",
+      "id": "task_surrogateescape_dcff",
+      "layout_delta": [
+        "ASCII JSON escape decodes to the POSIX surrogateescape code point U+DCFF"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_utf8",
+          "value": "{\"value\":\"\\udcff\"}\n"
+        }
+      ],
+      "note": "Frozen stdout contains raw byte ff and is not UTF-8.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001"
+      ],
+      "expected_result": "task_symlink_loop",
+      "group": "task-symlink",
+      "id": "task_symlink_loop",
+      "layout_delta": [
+        "saved Task symlink targets itself"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "delete"
+        },
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "symlink",
+          "target": "SL-CONFIG-TEST-ISOLATION-001.json"
+        }
+      ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "task",
+        "show",
+        "../escape"
+      ],
+      "expected_result": "task_unsafe_path_input",
+      "group": "task-show",
+      "id": "task_unsafe_path_input",
+      "layout_delta": [
+        "parent traversal occurs in CLI identity; no path lookup is allowed"
+      ],
+      "mutations": [],
+      "observed_with_frozen_reference": true
+    }
+  ],
+  "identities": {
+    "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+    "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+  },
+  "mutation_rules": {
+    "JSON_pointer": "Pointers use RFC 6901 syntax.",
+    "execution_layout": "Copy base-pass/.seal into a newly initialized disposable Git repository, apply mutations, then run command.",
+    "no_implicit_rehash": "Unless rebuild_run_manifest is explicit, mutations intentionally leave the original manifest unchanged.",
+    "rebuild_run_manifest": "Sort verification evidence_files by POSIX path; record current raw-byte size and SHA-256; recompute evidence_sha256 over canonical JSON without created_at; manifest itself is excluded.",
+    "set_raw_number": "Parse the JSON object, set the pointer to a unique quoted sentinel, serialize with ensure_ascii=true, indent=2, sorted keys, and a trailing newline, then replace only that quoted sentinel token with either the exact ASCII literal or text repeated count times from the repeat spec; exactly one of literal or repeat is required.",
+    "write_bytes_hex": "Write exactly the bytes decoded from the lowercase hexadecimal string; do not apply text encoding or a trailing newline implicitly.",
+    "write_repeated_utf8": "Write UTF-8 bytes formed by prefix + repeat.text repeated repeat.count times + suffix; do not add an implicit trailing newline."
+  },
+  "path_placeholders": {
+    "<outside>": "a disposable directory outside the fixture Git repository"
+  },
+  "reference": {
+    "command_prefix": [
+      "PYTHONPATH=<seal-legacy>/src",
+      "<seal-legacy>/.venv/bin/python",
+      "-m",
+      "seal_legacy"
+    ],
+    "commit": "94bb931a7934efe31549d4c21dc7153e43f27a08",
+    "repository": "https://github.com/jgoneit/seal-legacy",
+    "version": "0.3.0.dev0"
+  },
+  "schema_version": 1
+}

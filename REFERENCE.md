@@ -67,4 +67,19 @@ seal run show <TASK_ID> --run-id <RUN_ID>
 That slice should use behavioral fixtures derived from the frozen reference and
 compare JSON envelopes, integrity failures, and exit codes. It must not write
 Evidence, infer a latest identity, execute a reviewer, or implement completion.
-Fixture creation and the slice itself are outside this bootstrap.
+The bootstrap commit itself did not create fixtures or implement the slice.
+
+## Read-only conformance artifacts
+
+The first compatibility slice records its external contract and fixture
+provenance in:
+
+- `conformance/read-only-contract.md`
+- `conformance/README.md`
+- `conformance/fixtures/`
+- `conformance/expected/reference-results.json`
+- `contracts/ORIGINS.md`
+
+Imported contract files retain their byte-for-byte origin and SHA-256 in
+`contracts/ORIGINS.md`. These additions do not change the frozen reference
+commit, branch, tag, version, or offline bundle identity above.

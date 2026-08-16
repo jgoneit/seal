@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Seal Legacy Core (Python) Task Spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "type",
+    "objective",
+    "scope",
+    "checks",
+    "risk",
+    "verifier"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+    },
+    "type": {
+      "enum": [
+        "bugfix",
+        "feature",
+        "refactor",
+        "test",
+        "docs",
+        "config-infra"
+      ]
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/scopePath"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "$ref": "#/$defs/checkDefinition"
+          }
+        ]
+      }
+    },
+    "risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "verifier": {
+      "$ref": "#/$defs/verifier"
+    }
+  },
+  "$defs": {
+    "scopePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^(?:/|\\\\|[A-Za-z]:)"
+          },
+          {
+            "pattern": "(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)"
+          }
+        ]
+      }
+    },
+    "checkDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "argv",
+        "required"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "preferred_runner": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

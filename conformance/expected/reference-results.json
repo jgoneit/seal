@@ -1,0 +1,965 @@
+{
+  "normalization": {
+    "numeric_conversion_failure": "CPython integer conversion limits are compared by exit code, category, and terminal ValueError; environment-specific traceback frames are ignored.",
+    "stderr": "Recorded verbatim after replacing any disposable repository path with <repo>; category and exit code are conformance authority.",
+    "stderr_terminal_exception": "For an unhandled failure, the terminal exception class is authoritative after environment-specific traceback frames are ignored.",
+    "stdout": "Parsed as exactly one JSON object when non-empty; JSON key order and whitespace are not compared.",
+    "stdout_raw_hex": "When present, exact stdout bytes are authoritative; stdout_json is null when bytes are not strict UTF-8 JSON or contain Python-only numeric constants."
+  },
+  "reference": {
+    "commit": "94bb931a7934efe31549d4c21dc7153e43f27a08",
+    "invocation": "PYTHONPATH=<seal-legacy>/src <seal-legacy>/.venv/bin/python -m seal_legacy",
+    "repository": "https://github.com/jgoneit/seal-legacy",
+    "version": "0.3.0.dev0"
+  },
+  "results": {
+    "identity_evidence_task_mismatch": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: task.json id does not match requested Task id 'SL-CONFIG-TEST-ISOLATION-001'.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "identity_manifest_run_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: run-manifest.json run_id does not match the requested Run id.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "identity_manifest_task_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: run-manifest.json task_id does not match the requested Task id.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "identity_saved_task_mismatch": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: saved Task snapshot id does not match requested Task id 'SL-CONFIG-TEST-ISOLATION-001'.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "identity_verification_run_mismatch": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: verification.json run_id does not match the requested run id.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "identity_verification_task_mismatch": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: verification.json task_id does not match the requested Task id.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_absolute_evidence_path": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json evidence_files[0] must stay inside the Run directory.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_baseline_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: changed-files.json baseline does not match verification.json baseline.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_checks_tamper": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: checks.json checks[0].passed does not match timed_out and exit_code.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_duplicate_evidence_path": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json evidence_files[9] duplicates 'task.json'.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_evidence_sha_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: run-manifest.json evidence_sha256 does not match its file records.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_extra_listed_file": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json evidence_files has unexpected non-mechanical entry(s): extra.bin.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_extra_unlisted_physical_file": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "68443492cc30f09c4517d2c74d1fbc7bd27945b703b674cc588830b933e2c516",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "integrity_malformed_run_json": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Evidence file 'checks.json' is not valid JSON.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_manifest_hash_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: run-manifest.json hash mismatch for changed-files.json.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_manifest_size_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: run-manifest.json size mismatch for changed-files.json.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_mechanical_result_tamper": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json mechanical_result does not match saved scope and checks.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_missing_expected_file": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Required evidence file is missing: diff.patch.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_scope_aggregate_tamper": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json scope_pass does not match scope_violations.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_source_digest_record_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json source_after_checks_sha256 does not match source-after-checks.json.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_source_snapshot_tamper": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Source Binding artifact 'source-after-checks.json' is invalid: Source Snapshot snapshot_sha256 does not match its contents.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_unsafe_evidence_path": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json evidence_files[0] must stay inside the Run directory.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_unsupported_verification_version": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json has an unsupported schema_version.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "integrity_verification_aggregate_tamper": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: verification.json required_checks_pass does not match checks.json.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "run_binary_file": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "1c0d1f18695e438e1f7562cacb0a18311f7214bed96c34c6809fbeb3834b16f5",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_check_launch_failure": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": null,
+            "name": "contract-sync",
+            "passed": false,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "607fb837b5b59319eec36f8ecd9246826fc9b58198053437e1ebc24d84c88259",
+        "mechanical_result": "fail",
+        "required_checks_pass": false,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_deleted_file": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "ae474c9fa0cccca29a3c31b9bde7558edc0064239a1b016b1dba79fbc114af40",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_evidence_task_integer_before_syntax": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-numeric-conversion-failure",
+      "stderr_message": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+      "stderr_terminal_exception": "ValueError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "run_invalid_run_id": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Run id must contain only letters, numbers, underscores, or hyphens.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "run_invalid_task_id": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task id must contain only letters, numbers, underscores, or hyphens.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "run_missing": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Evidence Run directory is missing or unsafe: SL-CONFIG-TEST-ISOLATION-001/MISSING-RUN.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "run_mode_change": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "f718a78f6002fb4b880bb21014e78961980800d14d7d784f7748f6f994076426",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_optional_check_failure": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 1,
+            "name": "contract-sync",
+            "passed": false,
+            "required": false,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "9d324dd36a7e753e20dbe57eb216dfc9eb5682ba13c18ecc45330b2308e6e318",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_regular_file": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "68443492cc30f09c4517d2c74d1fbc7bd27945b703b674cc588830b933e2c516",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_renamed_file": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "fd9740d5b65a0e4ffa376dcbd2fcc7ef06b4c43a7f7e25d565968c15c3cbf2a8",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_repository_missing": {
+      "exit_code": 3,
+      "stderr_category": "repository-error",
+      "stderr_message": "error: Task commands must run inside a Git repository.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "run_required_check_failure": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 1,
+            "name": "contract-sync",
+            "passed": false,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "8491a5d53529a5d796804f9b68fa8b16429399de85f03c0c236b29696b832b7c",
+        "mechanical_result": "fail",
+        "required_checks_pass": false,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_required_timeout": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 1,
+            "name": "contract-sync",
+            "passed": false,
+            "required": true,
+            "timed_out": true
+          }
+        ],
+        "evidence_sha256": "23f1cefafdab5b703b77eaffe49f432e0ea8621e1ffb780c6e2c5de2a8aa1213",
+        "mechanical_result": "fail",
+        "required_checks_pass": false,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_saved_task_integer_before_syntax": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-numeric-conversion-failure",
+      "stderr_message": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+      "stderr_terminal_exception": "ValueError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "run_saved_task_invalid_raw_utf8": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Saved Task snapshot 'SL-CONFIG-TEST-ISOLATION-001' is unreadable or invalid JSON.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "run_scope_violation": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "d93bbdef9717e691c3e442584826a512a63a61dba1b2a214ec8678e776938e4e",
+        "mechanical_result": "fail",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": false,
+        "scope_violations": [
+          {
+            "path": "README.md",
+            "previous_path": null,
+            "source": "unstaged",
+            "status": "modified"
+          }
+        ],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_source_instability": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "2dec6926bc320570c26d520bce6b924c4d55464dcc1d73d95d35bd7496c026da",
+        "mechanical_result": "fail",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": false,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_surrogateescape_dcff_scope_violation": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": null,
+      "stdout_raw_hex": "7b0a202022636865636b73223a205b0a202020207b0a20202020202022657869745f636f6465223a20302c0a202020202020226e616d65223a2022636f6e74726163742d73796e63222c0a20202020202022706173736564223a20747275652c0a202020202020227265717569726564223a20747275652c0a2020202020202274696d65645f6f7574223a2066616c73650a202020207d0a20205d2c0a20202265766964656e63655f736861323536223a202234303235313164376339316265656537356432313537323238303635623532333562656663303430336536393864363335643634633037653833363066333664222c0a2020226d656368616e6963616c5f726573756c74223a20226661696c222c0a20202272657175697265645f636865636b735f70617373223a20747275652c0a20202272756e5f6964223a20223538616664316262316234643465383339376161616266663533613661653761222c0a202022736368656d615f76657273696f6e223a20312c0a20202273636f70655f70617373223a2066616c73652c0a20202273636f70655f76696f6c6174696f6e73223a205b0a202020207b0a2020202020202270617468223a2022646f63732fff222c0a2020202020202270726576696f75735f70617468223a206e756c6c2c0a20202020202022736f75726365223a2022756e747261636b6564222c0a20202020202022737461747573223a2022756e747261636b6564220a202020207d0a20205d2c0a202022736f757263655f737461626c655f647572696e675f636865636b73223a20747275652c0a2020227461736b5f6964223a2022534c2d434f4e4649472d544553542d49534f4c4154494f4e2d303031220a7d0a"
+    },
+    "run_task_confined_symlink": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "68443492cc30f09c4517d2c74d1fbc7bd27945b703b674cc588830b933e2c516",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_task_external_symlink": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "68443492cc30f09c4517d2c74d1fbc7bd27945b703b674cc588830b933e2c516",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "run_task_integer_digit_limit": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-numeric-conversion-failure",
+      "stderr_message": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+      "stderr_terminal_exception": "ValueError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "run_task_large_int_float_mismatch": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: task.json does not match saved Task snapshot 'SL-CONFIG-TEST-ISOLATION-001'.",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "run_task_number_float_rounding_equal": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "cf5aa81f0b9295fffb659ee9b23598830ee37f1a5b5ede6a9cbb6feb8b5d4e5c",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      },
+      "stdout_raw_hex": "7b0a202022636865636b73223a205b0a202020207b0a20202020202022657869745f636f6465223a20302c0a202020202020226e616d65223a2022636f6e74726163742d73796e63222c0a20202020202022706173736564223a20747275652c0a202020202020227265717569726564223a20747275652c0a2020202020202274696d65645f6f7574223a2066616c73650a202020207d0a20205d2c0a20202265766964656e63655f736861323536223a202263663561613831663062393239356666666236353965653962323335393838333065653337663161356235656465366139636262366665623862356434653563222c0a2020226d656368616e6963616c5f726573756c74223a202270617373222c0a20202272657175697265645f636865636b735f70617373223a20747275652c0a20202272756e5f6964223a20223538616664316262316234643465383339376161616266663533613661653761222c0a202022736368656d615f76657273696f6e223a20312c0a20202273636f70655f70617373223a20747275652c0a20202273636f70655f76696f6c6174696f6e73223a205b5d2c0a202022736f757263655f737461626c655f647572696e675f636865636b73223a20747275652c0a2020227461736b5f6964223a2022534c2d434f4e4649472d544553542d49534f4c4154494f4e2d303031220a7d0a"
+    },
+    "run_untracked_file": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "f1357eb13d3bc09228b81fe2b1439d4fd19cae751d8012d9a3b384c69e55a467",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "symlink_evidence_broken": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Required evidence file is missing: checks/000-contract-sync-a58dc509ede1.stderr.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "symlink_evidence_confined_regular_target": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "checks": [
+          {
+            "exit_code": 0,
+            "name": "contract-sync",
+            "passed": true,
+            "required": true,
+            "timed_out": false
+          }
+        ],
+        "evidence_sha256": "68443492cc30f09c4517d2c74d1fbc7bd27945b703b674cc588830b933e2c516",
+        "mechanical_result": "pass",
+        "required_checks_pass": true,
+        "run_id": "58afd1bb1b4d4e8397aaabff53a6ae7a",
+        "schema_version": 1,
+        "scope_pass": true,
+        "scope_violations": [],
+        "source_stable_during_checks": true,
+        "task_id": "SL-CONFIG-TEST-ISOLATION-001"
+      }
+    },
+    "symlink_evidence_loop": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Required evidence file is missing: checks/000-contract-sync-a58dc509ede1.stdout.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "symlink_evidence_outside_escape": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Required evidence file is unsafe or missing: checks/000-contract-sync-a58dc509ede1.stderr.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "symlink_evidence_target_manifest_mismatch": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: run-manifest.json size mismatch for checks/000-contract-sync-a58dc509ede1.stderr.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "symlink_evidence_task_directory_confined": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Evidence Run directory is missing or unsafe: SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "symlink_run_directory_confined": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Evidence Run directory is missing or unsafe: SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "symlink_unexpected_file_type": {
+      "exit_code": 8,
+      "stderr_category": "evidence-missing-or-corrupt",
+      "stderr_message": "error: Required evidence file is unsafe or missing: checks/000-contract-sync-a58dc509ede1.stderr.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_broken_symlink": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task 'SL-CONFIG-TEST-ISOLATION-001' does not exist.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_confined_symlink": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "baseline": "793b41cc849691bdbcad041b346927077210f7a6",
+        "checks": [
+          {
+            "argv": [
+              "python3",
+              "scripts/sync_contracts.py",
+              "--check"
+            ],
+            "name": "contract-sync",
+            "required": true,
+            "timeout_seconds": 60
+          }
+        ],
+        "id": "SL-CONFIG-TEST-ISOLATION-001",
+        "objective": "Make the Codex credential sandbox smoke test independent of ambient user configuration by running it with an isolated trusted CODEX_HOME.",
+        "risk": "low",
+        "schema_version": 1,
+        "scope": [
+          "tests/test_codex_permissions.py"
+        ],
+        "type": "test",
+        "verifier": {
+          "required": false
+        }
+      }
+    },
+    "task_external_symlink": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "baseline": "793b41cc849691bdbcad041b346927077210f7a6",
+        "checks": [
+          {
+            "argv": [
+              "python3",
+              "scripts/sync_contracts.py",
+              "--check"
+            ],
+            "name": "contract-sync",
+            "required": true,
+            "timeout_seconds": 60
+          }
+        ],
+        "id": "SL-CONFIG-TEST-ISOLATION-001",
+        "objective": "Make the Codex credential sandbox smoke test independent of ambient user configuration by running it with an isolated trusted CODEX_HOME.",
+        "risk": "low",
+        "schema_version": 1,
+        "scope": [
+          "tests/test_codex_permissions.py"
+        ],
+        "type": "test",
+        "verifier": {
+          "required": false
+        }
+      }
+    },
+    "task_integer_digit_limit": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-numeric-conversion-failure",
+      "stderr_message": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+      "stderr_terminal_exception": "ValueError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "task_invalid_id": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task id must contain only letters, numbers, underscores, or hyphens.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_invalid_raw_utf8": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-encoding-failure",
+      "stderr_message": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 10: invalid start byte",
+      "stderr_terminal_exception": "UnicodeDecodeError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "task_malformed_json": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task snapshot 'SL-CONFIG-TEST-ISOLATION-001' is not valid JSON: Expecting property name enclosed in double quotes.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_missing": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task 'MISSING-TASK' does not exist.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_non_object_json": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task snapshot 'SL-CONFIG-TEST-ISOLATION-001' must be a JSON object.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_normalized": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "baseline": "793b41cc849691bdbcad041b346927077210f7a6",
+        "checks": [
+          {
+            "argv": [
+              "python3",
+              "scripts/sync_contracts.py",
+              "--check"
+            ],
+            "name": "contract-sync",
+            "required": true,
+            "timeout_seconds": 60
+          }
+        ],
+        "id": "SL-CONFIG-TEST-ISOLATION-001",
+        "objective": "Make the Codex credential sandbox smoke test independent of ambient user configuration by running it with an isolated trusted CODEX_HOME.",
+        "risk": "low",
+        "schema_version": 1,
+        "scope": [
+          "tests/test_codex_permissions.py"
+        ],
+        "type": "test",
+        "verifier": {
+          "required": false
+        }
+      }
+    },
+    "task_numeric_normalization": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": null,
+      "stdout_raw_hex": "7b0a2020226e756d62657273223a205b0a20202020302c0a202020203132332e302c0a20202020496e66696e6974790a20205d0a7d0a",
+      "stdout_text": "{\n  \"numbers\": [\n    0,\n    123.0,\n    Infinity\n  ]\n}\n"
+    },
+    "task_repository_missing": {
+      "exit_code": 3,
+      "stderr_category": "repository-error",
+      "stderr_message": "error: Task commands must run inside a Git repository.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_saved_field_contradiction": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "baseline": "not-a-commit",
+        "id": "DIFFERENT",
+        "schema_version": 1
+      }
+    },
+    "task_schema_invalid_object": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": {
+        "id": "DIFFERENT",
+        "schema_version": 99,
+        "unexpected": true
+      }
+    },
+    "task_surrogateescape_dcff": {
+      "exit_code": 0,
+      "stderr_category": "none",
+      "stderr_message": "",
+      "stdout_empty": false,
+      "stdout_json": null,
+      "stdout_raw_hex": "7b0a20202276616c7565223a2022ff220a7d0a"
+    },
+    "task_symlink_loop": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task 'SL-CONFIG-TEST-ISOLATION-001' does not exist.",
+      "stdout_empty": true,
+      "stdout_json": null
+    },
+    "task_unsafe_path_input": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Task id must begin with an alphanumeric character and contain only letters, numbers, underscores, or hyphens.",
+      "stdout_empty": true,
+      "stdout_json": null
+    }
+  },
+  "schema_version": 1
+}
