@@ -2,7 +2,6 @@ package sourceobs
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -28,9 +27,8 @@ type snapshotCandidate struct {
 }
 
 type snapshotObservation struct {
-	entries         []Entry
-	fingerprints    []pathFingerprint
-	repositoryState string
+	entries      []Entry
+	fingerprints []pathFingerprint
 }
 
 type pathFingerprint struct {
@@ -58,10 +56,6 @@ func collectSnapshotObservation(context repositoryContext, baselineBlobs map[str
 	index, err := readIndexState(context.root)
 	if err != nil {
 		return snapshotObservation{}, err
-	}
-	head, err := resolveCommit(context.root, "HEAD")
-	if err != nil {
-		return snapshotObservation{}, repositoryFailure("Git HEAD changed into an invalid state.", err)
 	}
 	rawOutput, err := gitOutput(context.root,
 		"diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--no-ext-diff", "--no-textconv",
@@ -202,9 +196,8 @@ func collectSnapshotObservation(context repositoryContext, baselineBlobs map[str
 	sort.Slice(entries, func(left, right int) bool { return entries[left].Path < entries[right].Path })
 	sort.Slice(fingerprints, func(left, right int) bool { return fingerprints[left].path < fingerprints[right].path })
 	return snapshotObservation{
-		entries:         entries,
-		fingerprints:    fingerprints,
-		repositoryState: repositoryStateDigest(head, index.stageRaw, index.flagsRaw, untrackedRaw, rawOutput),
+		entries:      entries,
+		fingerprints: fingerprints,
 	}, nil
 }
 
@@ -518,22 +511,6 @@ func unsupportedFileType(path string, mode fs.FileMode) error {
 		kind = "directory"
 	}
 	return repositoryFailure("Unsupported "+kind+" source path: '"+path+"'.", nil)
-}
-
-func repositoryStateDigest(head string, parts ...[]byte) string {
-	hash := sha256.New()
-	writeStatePart(hash, []byte(head))
-	for _, part := range parts {
-		writeStatePart(hash, part)
-	}
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
-func writeStatePart(writer io.Writer, value []byte) {
-	var length [8]byte
-	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
-	_, _ = writer.Write(length[:])
-	_, _ = writer.Write(value)
 }
 
 func stringPointer(value string) *string { return &value }

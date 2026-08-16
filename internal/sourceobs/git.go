@@ -28,9 +28,7 @@ type treeEntry struct {
 }
 
 type indexState struct {
-	entries  map[string]treeEntry
-	stageRaw []byte
-	flagsRaw []byte
+	entries map[string]treeEntry
 }
 
 type rawDiffEntry struct {
@@ -202,7 +200,7 @@ func readIndexState(root string) (indexState, error) {
 		}
 		entries[path] = treeEntry{mode: mode, oid: *oid}
 	}
-	return indexState{entries: entries, stageRaw: stage, flagsRaw: flags}, nil
+	return indexState{entries: entries}, nil
 }
 
 func readBaselineTree(root, baseline string) (map[string]treeEntry, error) {
