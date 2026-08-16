@@ -67,10 +67,11 @@ seal task show <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
 ```
 
-The Task-create writer contract, including its narrowly approved destination
-confinement, is recorded in `conformance/task-create-contract.md`. These slices
-do not write Evidence, infer a latest identity, execute a reviewer, or implement
-verification or completion.
+The Task-create writer contract, including its frozen runtime-exit categories
+and narrowly approved destination, alias, and atomic-failure behavior, is
+recorded in `conformance/task-create-contract.md`. These slices do not write
+Evidence, infer a latest identity, execute a reviewer, or implement verification
+or completion.
 
 ## Conformance artifacts
 

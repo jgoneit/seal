@@ -53,6 +53,14 @@ local filesystems. This approved confinement does not change existing `task
 show`, `run show`, or Evidence symlink semantics, and it is not a blanket
 symlink policy for other `.seal` paths.
 
+The Task-create slice retains the frozen exit-1 categories for invalid UTF-8
+input or catalog bytes and JSON integer tokens longer than 4,300 decimal digits.
+Three writer-only divergences are explicitly approved: an unpaired UTF-16
+surrogate exits 1 without creating or truncating a destination, and an input or
+catalog that aliases the destination exits 2 without changing either source.
+These decisions preserve atomic publication and input/catalog immutability; they
+do not alter normalized Task meaning or authorize a broader writer policy.
+
 ## Explicit exclusions
 
 The migration does not bring over Python packaging, private helpers, Codex

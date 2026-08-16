@@ -15,6 +15,11 @@ The Go command spelling changes only the executable name to `seal`. The separate
 comparison, Verdict, Completion, latest-id selection, retry, or repair behavior
 is represented here.
 
+The closed Task-create matrix contains 102 classified cases: 88 exact
+Reference-contract cases, 14 approved Go writer divergences, and zero blocked
+cases. The exact runtime category and approved no-write decisions are recorded
+in `task-create-contract.md`.
+
 ## Artifact layout
 
 ```text

@@ -29,6 +29,12 @@ Argument-parser failures also exit 2 but use the parser's usage/error rendering;
 Go compatibility is based on the command category and exit code, not
 Python-specific usage text.
 
+Raw invalid UTF-8 in the Task input or catalog and a JSON integer token longer
+than 4,300 decimal digits retain the Reference's runtime exit category 1. Go
+reports these failures through one handled `error: <message>` line, leaves
+stdout empty, and does not write a Task snapshot. An unpaired UTF-16 surrogate
+escape also uses exit 1 under the approved atomic no-partial-write rule below.
+
 The Reference pipeline fixes observable error precedence:
 
 1. Parse the command shape.
@@ -211,52 +217,48 @@ after a pre-publication failure, although the destination remains unchanged.
 This double-fault path is best-effort cleanup rather than a transactional
 guarantee and was not fault-injected in this slice.
 
-## Blocked Reference edge cases
+## Final edge-case classifications
 
-Five newly observed cases combine incompatible requirements and are not claimed
-as exact parity in this slice:
+The G2 closure resolves all five previously undecided Reference edges. Raw
+invalid UTF-8 in the input or catalog retains the Reference's exit-1 decoding
+category, and a 4,301-digit JSON integer retains its exit-1 conversion category.
+Both fail before publication, leave stdout empty, and preserve the repository.
+The 4,300-digit positive timeout boundary remains accepted.
+
+Three artifact-safety and immutability cases are approved Go divergences:
 
 - A JSON string containing an unpaired UTF-16 surrogate passes the frozen
   structural validator, then the Reference exits 1 while encoding output. A
   first create can leave an empty destination and force can truncate existing
-  bytes. Reproducing that artifact contradicts the required atomic failure and
-  destination-preservation contract. Go must not publish a partial snapshot;
-  the exact compatibility classification remains blocked pending an explicit
-  canonical decision.
+  bytes. Go retains exit 1 but rejects the input before publication: first create
+  leaves no destination, force preserves the existing destination, and neither
+  path leaves temporary residue.
 - With `--force`, an input file that is itself the destination Task path is
-  overwritten by the normalized snapshot in the Reference. Reproducing that
-  behavior contradicts unconditional input-file immutability. Exact alias-case
-  behavior remains blocked; ordinary distinct input paths are immutable.
+  overwritten by the normalized snapshot in the Reference. Go instead exits 2
+  and preserves the aliased input/destination bytes.
 - A catalog symlink may resolve to the destination Task file. The Reference
   reads that file as the catalog and then force-replaces it with the Task
-  snapshot, which changes the bytes visible through `.seal/checks.json`.
-  Reproducing this aliases the otherwise immutable catalog to the allowed
-  destination write. This exact alias case is blocked with the input/destination
-  alias pending the same policy decision; ordinary catalog symlink reads remain
-  compatible.
+  snapshot. Go instead exits 2 and preserves both the destination bytes and the
+  bytes visible through `.seal/checks.json`.
 
-Additional parser-limit classifications are also blocked rather than counted as
-ordinary exact parity:
+Ordinary distinct Task inputs remain immutable, and ordinary catalog symlink
+reads remain compatible. These approvals apply only to the Task snapshot writer;
+they do not generalize to stored Task reads or Evidence paths.
 
-- Raw invalid UTF-8 in the input or catalog escapes the Reference as an
-  unhandled `UnicodeDecodeError` with exit 1, while the requested public table
-  classifies malformed input and catalog data as exit 2.
-- A 4,301-digit JSON integer token escapes CPython's configured conversion
-  limit as an unhandled `ValueError` with exit 1; 4,300 digits can be accepted
-  for a positive timeout. The requested public table otherwise names only
-  exits 0, 2, and 3 for Task creation.
+The final Task-create conformance matrix is:
+
+| Classification | Cases |
+| --- | ---: |
+| Exact Reference contract | 88 |
+| Approved Go divergence | 14 |
+| Blocked | 0 |
+| **Total** | **102** |
 
 The Reference's modes are umask-dependent (`0755`/`0644` under umask `022` and
 `0700`/`0600` under umask `077`), so there are no exact deterministic Reference
 modes to reproduce. This slice fixes newly created Task directories at `0755`
 and snapshots at `0644`, the common Reference result under umask `022`, and
 records that choice as writer hardening rather than exact byte metadata parity.
-
-The current Go candidate fails closed with handled exit 2 for the blocked
-encoding, integer-limit, surrogate, and input/catalog alias cases. Those
-outcomes preserve the requested no-partial-write and input/catalog immutability
-properties, but they are excluded from the exact Reference-parity count until a
-canonical transition decides their public classification.
 
 ## Write set and exclusions
 
