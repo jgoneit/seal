@@ -98,7 +98,7 @@ func loadCreateJSONObject(path, context string) (map[string]any, error) {
 		return nil, invalidInput(fmt.Sprintf("Could not read %s: %s.", context, path), err)
 	}
 	if !utf8.Valid(contents) {
-		return nil, invalidInput(fmt.Sprintf("%s is not valid UTF-8.", context), nil)
+		return nil, encodingFailure(fmt.Sprintf("%s is not valid UTF-8.", context), nil)
 	}
 
 	normalized, markers := replacePythonConstants(contents)
@@ -107,13 +107,13 @@ func loadCreateJSONObject(path, context string) (map[string]any, error) {
 		return nil, invalidInput(fmt.Sprintf("%s is not valid JSON: %v.", context, err), err)
 	}
 	if containsOversizedPythonInteger(normalized) {
-		return nil, invalidInput(
+		return nil, numericFailure(
 			fmt.Sprintf("%s contains a JSON integer exceeding the supported 4300-digit limit.", context),
 			nil,
 		)
 	}
 	if containsUnpairedJSONSurrogate(contents) {
-		return nil, invalidInput(
+		return nil, encodingFailure(
 			fmt.Sprintf("%s contains an unpaired UTF-16 surrogate escape.", context),
 			nil,
 		)

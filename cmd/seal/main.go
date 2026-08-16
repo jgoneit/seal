@@ -106,8 +106,13 @@ func createTask(cwd, taskFile string, force bool, stdout, stderr io.Writer) int 
 	encoded, err := taskstate.Create(cwd, taskFile, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
-		if kind, ok := taskstate.KindOf(err); ok && kind == taskstate.Repository {
-			return 3
+		if kind, ok := taskstate.KindOf(err); ok {
+			switch kind {
+			case taskstate.EncodingFailure, taskstate.NumericFailure, taskstate.NestingLimitFailure:
+				return 1
+			case taskstate.Repository:
+				return 3
+			}
 		}
 		return 2
 	}
