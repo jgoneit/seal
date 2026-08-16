@@ -278,6 +278,15 @@
         "task_id": "SL-CONFIG-TEST-ISOLATION-001"
       }
     },
+    "run_evidence_task_integer_before_syntax": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-numeric-conversion-failure",
+      "stderr_message": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+      "stderr_terminal_exception": "ValueError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
     "run_invalid_run_id": {
       "exit_code": 2,
       "stderr_category": "invalid-input-or-identity",
@@ -461,6 +470,22 @@
         "source_stable_during_checks": true,
         "task_id": "SL-CONFIG-TEST-ISOLATION-001"
       }
+    },
+    "run_saved_task_integer_before_syntax": {
+      "exit_code": 1,
+      "stderr_category": "unhandled-numeric-conversion-failure",
+      "stderr_message": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit",
+      "stderr_terminal_exception": "ValueError",
+      "stdout_empty": true,
+      "stdout_json": null,
+      "stdout_raw_hex": ""
+    },
+    "run_saved_task_invalid_raw_utf8": {
+      "exit_code": 2,
+      "stderr_category": "invalid-input-or-identity",
+      "stderr_message": "error: Saved Task snapshot 'SL-CONFIG-TEST-ISOLATION-001' is unreadable or invalid JSON.",
+      "stdout_empty": true,
+      "stdout_json": null
     },
     "run_scope_violation": {
       "exit_code": 0,

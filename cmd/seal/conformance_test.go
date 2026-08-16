@@ -20,7 +20,7 @@ const (
 	corpusReferenceCommit     = "94bb931a7934efe31549d4c21dc7153e43f27a08"
 	corpusReferenceRepository = "https://github.com/jgoneit/seal-legacy"
 	corpusReferenceVersion    = "0.3.0.dev0"
-	corpusCaseCount           = 71
+	corpusCaseCount           = 74
 )
 
 type corpusEnvelope struct {
@@ -81,7 +81,9 @@ type corpusMutation struct {
 	Op      string          `json:"op"`
 	Path    string          `json:"path"`
 	Pointer string          `json:"pointer"`
+	Prefix  string          `json:"prefix"`
 	Repeat  *corpusRepeat   `json:"repeat"`
+	Suffix  string          `json:"suffix"`
 	Target  string          `json:"target"`
 	To      string          `json:"to"`
 	Value   json.RawMessage `json:"value"`
@@ -152,8 +154,8 @@ func TestRunCLIConformanceCorpusMatchesFrozenReferenceWithoutWrites(t *testing.T
 			artifactValues += len(testCase.ExpectedArtifacts)
 		}
 	}
-	if artifactCases != 2 || artifactValues != 4 {
-		t.Fatalf("expected_artifact_values coverage = %d cases/%d values, want 2/4", artifactCases, artifactValues)
+	if artifactCases != 3 || artifactValues != 5 {
+		t.Fatalf("expected_artifact_values coverage = %d cases/%d values, want 3/5", artifactCases, artifactValues)
 	}
 	for resultID := range expected.Results {
 		if _, ok := seen[resultID]; !ok {
@@ -423,6 +425,12 @@ func applyCorpusMutation(repository, outside string, mutation corpusMutation) er
 		if err := json.Unmarshal(mutation.Value, &value); err != nil {
 			return fmt.Errorf("decode write_utf8 value: %w", err)
 		}
+		return writeCorpusFile(resolve(mutation.File), []byte(value))
+	case "write_repeated_utf8":
+		if mutation.Repeat == nil || mutation.Repeat.Count < 1 || mutation.Repeat.Text == "" {
+			return fmt.Errorf("invalid write_repeated_utf8 recipe")
+		}
+		value := mutation.Prefix + strings.Repeat(mutation.Repeat.Text, mutation.Repeat.Count) + mutation.Suffix
 		return writeCorpusFile(resolve(mutation.File), []byte(value))
 	case "write_bytes_hex":
 		contents, err := hex.DecodeString(mutation.Hex)
@@ -908,7 +916,7 @@ func normalizeCorpusStderrMessage(caseID, message, terminalException, repository
 			return "", fmt.Errorf("malformed-JSON parser message does not have the recorded prefix: %q", message)
 		}
 		return prefix + " <parser-detail>", nil
-	case "run_task_integer_digit_limit":
+	case "run_evidence_task_integer_before_syntax", "run_saved_task_integer_before_syntax", "run_task_integer_digit_limit":
 		if recorded {
 			if terminalException != "ValueError" || message != "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4301 digits; use sys.set_int_max_str_digits() to increase the limit" {
 				return "", fmt.Errorf("unexpected recorded numeric conversion failure: %q/%q", terminalException, message)

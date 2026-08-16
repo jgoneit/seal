@@ -746,6 +746,63 @@
         "--run-id",
         "58afd1bb1b4d4e8397aaabff53a6ae7a"
       ],
+      "expected_result": "run_saved_task_integer_before_syntax",
+      "group": "run-number-compatibility",
+      "id": "run_saved_task_integer_before_syntax",
+      "layout_delta": [
+        "saved Task contains a positive 4301-digit decimal integer before a later JSON syntax error"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "op": "write_repeated_utf8",
+          "prefix": "{\"compat_number\":",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          },
+          "suffix": ",}\n"
+        }
+      ],
+      "note": "CPython raises ValueError for the oversized integer before reporting the later trailing-comma syntax error.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_result": "run_saved_task_invalid_raw_utf8",
+      "group": "run-raw-bytes",
+      "id": "run_saved_task_invalid_raw_utf8",
+      "layout_delta": [
+        "saved Task contains raw ff inside a JSON string before Run validation"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/tasks/SL-CONFIG-TEST-ISOLATION-001.json",
+          "hex": "7b2276616c7565223a22ff227d0a",
+          "op": "write_bytes_hex"
+        }
+      ],
+      "note": "Run validation catches the Unicode decoding failure at the saved Task boundary and maps it to the frozen invalid-input result.",
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
       "expected_result": "run_deleted_file",
       "group": "run-valid",
       "id": "run_deleted_file",
@@ -793,6 +850,45 @@
           "op": "rebuild_run_manifest"
         }
       ],
+      "observed_with_frozen_reference": true
+    },
+    {
+      "base": "base-pass",
+      "command": [
+        "seal-legacy",
+        "run",
+        "show",
+        "SL-CONFIG-TEST-ISOLATION-001",
+        "--run-id",
+        "58afd1bb1b4d4e8397aaabff53a6ae7a"
+      ],
+      "expected_artifact_values": {
+        "generated_manifest_evidence_sha256": "8c8d2d6657a4c39905cd92185224f264217f118390f6d2613d73ba5ff6581220"
+      },
+      "expected_result": "run_evidence_task_integer_before_syntax",
+      "group": "run-number-compatibility",
+      "id": "run_evidence_task_integer_before_syntax",
+      "layout_delta": [
+        "Evidence task.json contains a positive 4301-digit decimal integer before a later JSON syntax error"
+      ],
+      "mutations": [
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/task.json",
+          "op": "write_repeated_utf8",
+          "prefix": "{\"compat_number\":",
+          "repeat": {
+            "count": 4301,
+            "text": "9"
+          },
+          "suffix": ",}\n"
+        },
+        {
+          "file": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/run-manifest.json",
+          "from": ".seal/evidence/SL-CONFIG-TEST-ISOLATION-001/58afd1bb1b4d4e8397aaabff53a6ae7a/verification.json#/evidence_files",
+          "op": "rebuild_run_manifest"
+        }
+      ],
+      "note": "CPython raises ValueError for the oversized integer before reporting the later trailing-comma syntax error.",
       "observed_with_frozen_reference": true
     },
     {
@@ -2391,7 +2487,8 @@
     "no_implicit_rehash": "Unless rebuild_run_manifest is explicit, mutations intentionally leave the original manifest unchanged.",
     "rebuild_run_manifest": "Sort verification evidence_files by POSIX path; record current raw-byte size and SHA-256; recompute evidence_sha256 over canonical JSON without created_at; manifest itself is excluded.",
     "set_raw_number": "Parse the JSON object, set the pointer to a unique quoted sentinel, serialize with ensure_ascii=true, indent=2, sorted keys, and a trailing newline, then replace only that quoted sentinel token with either the exact ASCII literal or text repeated count times from the repeat spec; exactly one of literal or repeat is required.",
-    "write_bytes_hex": "Write exactly the bytes decoded from the lowercase hexadecimal string; do not apply text encoding or a trailing newline implicitly."
+    "write_bytes_hex": "Write exactly the bytes decoded from the lowercase hexadecimal string; do not apply text encoding or a trailing newline implicitly.",
+    "write_repeated_utf8": "Write UTF-8 bytes formed by prefix + repeat.text repeated repeat.count times + suffix; do not add an implicit trailing newline."
   },
   "path_placeholders": {
     "<outside>": "a disposable directory outside the fixture Git repository"
