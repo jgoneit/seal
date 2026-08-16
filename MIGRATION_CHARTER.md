@@ -61,6 +61,34 @@ catalog that aliases the destination exits 2 without changing either source.
 These decisions preserve atomic publication and input/catalog immutability; they
 do not alter normalized Task meaning or authorize a broader writer policy.
 
+The third public compatibility slice adds only `seal verify <TASK_ID>`. Verify
+executes saved checks, observes S0 and S1 source identity, records layered Git
+changes, and publishes one manifest-complete Evidence Run. A recorded Run is a
+successful verification operation even when its mechanical result is `fail`.
+Verify does not decide Completion, read Verdict, select a latest identity, or
+invoke another Toolkit module.
+
+For the Evidence writer only, Go prevalidates the saved Task and check
+definitions before S0, writes into a private sibling staging directory, and
+publishes the complete directory with a native no-replace rename. It rejects
+symlinked or non-directory writer ancestors and repository escape. These are
+approved writer-safety and whole-directory atomicity divergences from the
+frozen writer, which exposes incomplete Run directories after some failures.
+They do not change the recorded Task, check, Scope, source, verification, or
+manifest meanings consumed by either frozen Python or Go `run show`.
+
+Atomic publication is claimed only for same-filesystem local POSIX filesystems
+with the required native rename primitive and for NTFS. Network filesystems,
+FUSE implementations, and filesystems without the required no-replace
+operation fail closed or remain outside the support claim. Atomic visibility
+does not imply crash-proof storage: file and pre-publication directory syncs
+are required, while a post-commit parent-directory sync is best effort because
+returning failure after a successful rename would contradict the public commit
+state. An unrelated process with the same operating-system account can still
+race mutable directory names between identity checks on POSIX; that hostile
+same-user race is outside the v1 atomic object-binding guarantee. Windows uses
+handle-relative publication and has no pathname fallback.
+
 ## Explicit exclusions
 
 The migration does not bring over Python packaging, private helpers, Codex
