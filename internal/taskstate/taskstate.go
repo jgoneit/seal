@@ -1,4 +1,4 @@
-// Package taskstate implements the read-only stored Task lookup boundary.
+// Package taskstate implements Task snapshot creation and exact stored lookup.
 package taskstate
 
 import (
@@ -58,8 +58,9 @@ func (e *jsonDecodeFailure) Unwrap() error {
 type ErrorKind uint8
 
 const (
-	// InvalidInput identifies invalid identities, missing snapshots, and invalid
-	// stored JSON. The CLI maps it to exit code 2.
+	// InvalidInput identifies invalid Task creation inputs and destinations,
+	// invalid identities, missing snapshots, and invalid stored JSON. The CLI
+	// maps it to exit code 2.
 	InvalidInput ErrorKind = iota + 1
 	// Repository identifies failures to discover the current Git repository.
 	// The CLI maps it to exit code 3.
@@ -75,7 +76,7 @@ const (
 	NestingLimitFailure
 )
 
-// Error is a classified Task lookup failure.
+// Error is a classified Task creation or lookup failure.
 type Error struct {
 	kind    ErrorKind
 	message string

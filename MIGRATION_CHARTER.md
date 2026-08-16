@@ -37,12 +37,29 @@ protected by a regression test. Such an exception must not change Task or Run
 identity, mechanical state, Scope, required checks, source stability, Evidence
 or manifest integrity, or Completion meaning.
 
-Persisted root and Evidence compatibility must be decided before the first Go
-writer is introduced. This bootstrap creates no runtime data and makes no
-automatic migration claim.
+The Task snapshot destination decision below is the narrow persisted-root
+decision for the first Go writer. It does not revise or generalize the frozen
+Evidence compatibility contract. The bootstrap created no runtime data and
+made no automatic migration claim.
 
 The first implemented slice is exact-identity, read-only `.seal` Task and Run
 query compatibility; it introduces no writer or lifecycle transition.
+
+The second implemented slice adds only the Task snapshot writer. For that
+writer destination alone, Go rejects symlinked, non-directory, traversing, or
+repository-escaping paths and publishes complete snapshots from the destination
+directory with atomic no-clobber and replacement operations on the supported
+local filesystems. This approved confinement does not change existing `task
+show`, `run show`, or Evidence symlink semantics, and it is not a blanket
+symlink policy for other `.seal` paths.
+
+The Task-create slice retains the frozen exit-1 categories for invalid UTF-8
+input or catalog bytes and JSON integer tokens longer than 4,300 decimal digits.
+Three writer-only divergences are explicitly approved: an unpaired UTF-16
+surrogate exits 1 without creating or truncating a destination, and an input or
+catalog that aliases the destination exits 2 without changing either source.
+These decisions preserve atomic publication and input/catalog immutability; they
+do not alter normalized Task meaning or authorize a broader writer policy.
 
 ## Explicit exclusions
 

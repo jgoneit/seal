@@ -13,5 +13,6 @@ contracts.
 The Reference has no canonical standalone schema files for
 `changed-files.json`, `checks.json`, Source Snapshots, or
 `run-manifest.json`. This slice does not invent replacements. Bundle, Verdict,
-Completion, verifier-prompt, Plugin, and UI contracts are outside the two
-read-only commands and are intentionally not copied.
+Completion, verifier-prompt, Plugin, and UI contracts are outside the
+implemented Task-create and read-only query slices and are intentionally not
+copied.

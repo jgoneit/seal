@@ -39,7 +39,9 @@ Conformance work may carry forward these externally observable meanings:
 - exact, read-only Run summary semantics
 - deterministic completion decision order
 - machine-readable standard output and stable exit codes
-- confined paths, atomic writes, manifests, and content digests
+- path confinement and write atomicity only where the frozen contract or an
+  explicitly approved divergence requires them
+- manifests and content digests
 - explicit trust and security limitations
 - behavioral regressions captured as future conformance scenarios
 
@@ -55,26 +57,29 @@ The Go codebase does not copy or mirror:
 - Knowledge or Security functionality
 - retry, repair, latest-identity inference, or process control
 
-## First conformance slice candidate
+## Implemented conformance slices
 
-The next recommended slice is exact-identity, read-only compatibility for:
+The Go successor implements these compatibility slices:
 
 ```text
+seal task create --file <TASK_JSON> [--force]
 seal task show <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
 ```
 
-That slice should use behavioral fixtures derived from the frozen reference and
-compare JSON envelopes, integrity failures, and exit codes. It must not write
-Evidence, infer a latest identity, execute a reviewer, or implement completion.
-The bootstrap commit itself did not create fixtures or implement the slice.
+The Task-create writer contract, including its frozen runtime-exit categories
+and narrowly approved destination, alias, and atomic-failure behavior, is
+recorded in `conformance/task-create-contract.md`. These slices do not write
+Evidence, infer a latest identity, execute a reviewer, or implement verification
+or completion.
 
-## Read-only conformance artifacts
+## Conformance artifacts
 
-The first compatibility slice records its external contract and fixture
-provenance in:
+The compatibility slices record their external contracts and fixture provenance
+in:
 
 - `conformance/read-only-contract.md`
+- `conformance/task-create-contract.md`
 - `conformance/README.md`
 - `conformance/fixtures/`
 - `conformance/expected/reference-results.json`

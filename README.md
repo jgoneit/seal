@@ -25,23 +25,29 @@ behavioral reference remains [Seal Legacy](https://github.com/jgoneit/seal-legac
 the preserved Python implementation.
 
 The canonical implementation has not switched to Go. This repository does not
-translate the Python package structure. Its current compatibility surface is
-limited to read-only queries for an exact stored Task or Evidence Run under
-`.seal`. The Python reference remains canonical, and no writer has been
-introduced.
+translate the Python package structure. Its current compatibility surface
+creates normalized Task snapshots and provides read-only queries for an exact
+stored Task or Evidence Run under `.seal`. The Python reference remains
+canonical.
 
 ## Current CLI
 
-Four read-only operations are available:
+The following operations are available:
 
 ```text
 seal --help
 seal --version
+seal task create --file <TASK_JSON> [--force]
 seal task show <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
 ```
 
 The development version is `0.0.0-dev`.
+
+`task create` validates and normalizes a Task Spec, resolves catalog check
+references, records the repository's current full HEAD as its baseline, and
+writes the snapshot to `.seal/tasks/<TASK_ID>.json`. Existing snapshots require
+an explicit `--force` to be replaced.
 
 `task show` reproduces the frozen reference's lookup behavior: it requires an
 exact path-safe Task ID and returns a syntactically valid stored JSON object
@@ -53,16 +59,17 @@ then returns the transient `validated-run-summary/v1` view. A structurally
 valid failed Run still returns exit 0; missing, unsafe, unsupported, tampered,
 or contradictory Evidence returns exit 8.
 
-This slice does not create Tasks, run checks, verify work, collect current
-source, read Verdict or Completion state, complete Tasks, infer a latest
-identity, retry, repair, or write persisted Evidence. It reads `.seal` only and
-has no `.harness` fallback.
+Seal does not yet implement `verify`, `complete`, Bundle, Verdict, Reviewer, or
+installer behavior. It does not run checks, collect current source, write
+persisted Evidence, infer a latest identity, retry, or repair, and it has no
+`.harness` fallback.
 
 To exercise the candidate from a Go checkout:
 
 ```bash
 go run ./cmd/seal --help
 go run ./cmd/seal --version
+go run ./cmd/seal task create --file <TASK_JSON> [--force]
 go run ./cmd/seal task show <TASK_ID>
 go run ./cmd/seal run show <TASK_ID> --run-id <RUN_ID>
 ```
@@ -78,9 +85,11 @@ behavioral contract from the Python reference. The goal is reproduction of
 established Acceptance meaning and outcomes, not new product design.
 
 The first compatibility slice covers exact read-only `task show` and `run show`
-identities using fixtures derived from the frozen reference. See
-[the read-only contract](conformance/read-only-contract.md) and
-[fixture provenance](conformance/README.md). It does not add Evidence writes,
+identities using fixtures derived from the frozen reference. The second covers
+the normalized `task create` snapshot writer. See
+[the read-only contract](conformance/read-only-contract.md),
+[the Task-create contract](conformance/task-create-contract.md), and
+[fixture provenance](conformance/README.md). Neither slice adds Evidence writes,
 retries, repair, latest-Run inference, reviewer execution, or workflow
 orchestration.
 

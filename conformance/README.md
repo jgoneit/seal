@@ -1,7 +1,7 @@
-# Read-only conformance data
+# Conformance data
 
-This directory records black-box behavior observed from Seal Legacy Core
-`0.3.0.dev0` at the frozen commit
+The read-only corpus in this directory records black-box behavior observed from
+Seal Legacy Core `0.3.0.dev0` at the frozen commit
 `94bb931a7934efe31549d4c21dc7153e43f27a08`. The two commands in scope are:
 
 ```text
@@ -9,9 +9,16 @@ seal-legacy task show <TASK_ID>
 seal-legacy run show <TASK_ID> --run-id <RUN_ID>
 ```
 
-The Go command spelling changes only the executable name to `seal`. No Writer,
-check runner, current-source comparison, Verdict, Completion, latest-id
-selection, retry, or repair behavior is represented here.
+The Go command spelling changes only the executable name to `seal`. The separate
+`task-create-contract.md` records the Task snapshot writer boundary exercised by
+`cmd/seal/task_create_conformance_test.go`. No check runner, current-source
+comparison, Verdict, Completion, latest-id selection, retry, or repair behavior
+is represented here.
+
+The closed Task-create matrix contains 102 classified cases: 88 exact
+Reference-contract cases, 14 approved Go writer divergences, and zero blocked
+cases. The exact runtime category and approved no-write decisions are recorded
+in `task-create-contract.md`.
 
 ## Artifact layout
 
