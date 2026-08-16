@@ -345,6 +345,12 @@ func readSavedTask(repository, taskID string) (jsonObject, error) {
 	}
 	value, err := decodeJSONObject(contents)
 	if err != nil {
+		if isStandardJSONDepthLimit(err) {
+			return nil, &RuntimeError{message: fmt.Sprintf(
+				"Saved Task snapshot '%s' exceeds the supported JSON nesting depth.",
+				taskID,
+			)}
+		}
 		if KindOf(err) == KindRuntime {
 			return nil, err
 		}

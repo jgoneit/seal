@@ -3,6 +3,7 @@ package runstate
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -31,10 +32,17 @@ func decodeJSONObject(contents []byte) (jsonObject, error) {
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
+		if containsOversizedJSONInteger(protected[:numericScanLimit(protected, err)]) {
+			return nil, oversizedJSONIntegerError()
+		}
 		return nil, err
 	}
+	firstValueEnd := int(decoder.InputOffset())
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
+		if containsOversizedJSONInteger(protected[:firstValueEnd]) {
+			return nil, oversizedJSONIntegerError()
+		}
 		if err == nil {
 			return nil, fmt.Errorf("multiple JSON values")
 		}
@@ -49,6 +57,95 @@ func decodeJSONObject(contents []byte) (jsonObject, error) {
 		return nil, err
 	}
 	return jsonObject(restored.(map[string]any)), nil
+}
+
+func numericScanLimit(contents []byte, err error) int {
+	limit := len(contents)
+	var syntaxError *json.SyntaxError
+	if errors.As(err, &syntaxError) && syntaxError.Offset >= 0 && syntaxError.Offset < int64(limit) {
+		limit = int(syntaxError.Offset)
+	}
+	return limit
+}
+
+func containsOversizedJSONInteger(contents []byte) bool {
+	inString := false
+	for index := 0; index < len(contents); {
+		character := contents[index]
+		if inString {
+			index++
+			if character == '\\' && index < len(contents) {
+				index++
+				continue
+			}
+			if character == '"' {
+				inString = false
+			}
+			continue
+		}
+		if character == '"' {
+			inString = true
+			index++
+			continue
+		}
+
+		numberStart := index
+		if character == '-' {
+			index++
+			if index >= len(contents) || contents[index] < '0' || contents[index] > '9' {
+				continue
+			}
+		} else if character < '0' || character > '9' {
+			index++
+			continue
+		}
+
+		digitsStart := index
+		for index < len(contents) && contents[index] >= '0' && contents[index] <= '9' {
+			index++
+		}
+		digitCount := index - digitsStart
+		isInteger := true
+		if index+1 < len(contents) && contents[index] == '.' &&
+			contents[index+1] >= '0' && contents[index+1] <= '9' {
+			isInteger = false
+			index++
+			for index < len(contents) && contents[index] >= '0' && contents[index] <= '9' {
+				index++
+			}
+		}
+		exponentStart := index
+		if index < len(contents) && (contents[index] == 'e' || contents[index] == 'E') {
+			index++
+			if index < len(contents) && (contents[index] == '+' || contents[index] == '-') {
+				index++
+			}
+			if index >= len(contents) || contents[index] < '0' || contents[index] > '9' {
+				index = exponentStart
+			} else {
+				isInteger = false
+				for index < len(contents) && contents[index] >= '0' && contents[index] <= '9' {
+					index++
+				}
+			}
+		}
+		if isInteger && digitCount > pythonIntegerDigitLimit {
+			return true
+		}
+		if index == numberStart {
+			index++
+		}
+	}
+	return false
+}
+
+func oversizedJSONIntegerError() error {
+	return &RuntimeError{message: "JSON integer token exceeds the frozen Python runtime limit of 4300 digits."}
+}
+
+func isStandardJSONDepthLimit(err error) bool {
+	var syntaxError *json.SyntaxError
+	return errors.As(err, &syntaxError) && strings.Contains(syntaxError.Error(), "exceeded max depth")
 }
 
 // protectLoneSurrogates keeps encoding/json from replacing an escaped lone

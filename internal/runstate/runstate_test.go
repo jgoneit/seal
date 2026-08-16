@@ -673,6 +673,25 @@ func TestSavedTaskEqualityUsesPythonNumberSemantics(t *testing.T) {
 	}
 }
 
+func TestRepositoryAndSourcePathColonAsymmetry(t *testing.T) {
+	paths := []string{
+		"1:file",
+		"_:file",
+		"C:file",
+		"C:/file",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			if _, err := safeRepositoryPath(path, "test path", false); err == nil || KindOf(err) != KindEvidence {
+				t.Fatalf("safeRepositoryPath(%q) error = %v, kind = %v, want Evidence", path, err, KindOf(err))
+			}
+			if err := validateSourcePath(path); err != nil {
+				t.Fatalf("validateSourcePath(%q) error = %v", path, err)
+			}
+		})
+	}
+}
+
 func TestPythonIntegerDigitLimitParity(t *testing.T) {
 	limit := strings.Repeat("9", pythonIntegerDigitLimit)
 	overLimit := strings.Repeat("9", pythonIntegerDigitLimit+1)
@@ -750,6 +769,56 @@ func TestPythonIntegerDigitLimitParity(t *testing.T) {
 	})
 }
 
+func TestPythonIntegerLimitPrecedesLaterJSONSyntaxFailure(t *testing.T) {
+	overLimit := strings.Repeat("9", pythonIntegerDigitLimit+1)
+	directTests := []struct {
+		name        string
+		contents    string
+		wantRuntime bool
+	}{
+		{"integer before trailing comma", `{"value":` + overLimit + `,}`, true},
+		{"integer before malformed later field", `{"value":` + overLimit + `,"later":}`, true},
+		{"integer in first value before malformed trailing value", `{"value":` + overLimit + `} BAD`, true},
+		{"syntax error before integer", `{"value":,"later":` + overLimit + `}`, false},
+		{"decimal before syntax error", `{"value":` + overLimit + `.0,}`, false},
+		{"exponent before syntax error", `{"value":1e` + overLimit + `,}`, false},
+		{"digits in string before syntax error", `{"value":"` + overLimit + `",}`, false},
+	}
+	for _, test := range directTests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := decodeJSONObject([]byte(test.contents))
+			if test.wantRuntime {
+				requireRuntimeError(t, err)
+				return
+			}
+			if err == nil || KindOf(err) != KindUnknown {
+				t.Fatalf("decodeJSONObject() error = %v, kind = %v, want unclassified syntax error", err, KindOf(err))
+			}
+		})
+	}
+
+	boundaryTests := []struct {
+		name string
+		path func(runFixture) string
+	}{
+		{"saved Task", func(fixture runFixture) string { return fixture.taskPath }},
+		{"Evidence task", func(fixture runFixture) string { return filepath.Join(fixture.runPath, "task.json") }},
+		{"checks", func(fixture runFixture) string { return filepath.Join(fixture.runPath, "checks.json") }},
+		{"manifest", func(fixture runFixture) string { return filepath.Join(fixture.runPath, "run-manifest.json") }},
+	}
+	for _, test := range boundaryTests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+			contents := []byte(`{"compat_number":` + overLimit + `,}`)
+			if err := os.WriteFile(test.path(fixture), contents, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := ValidateRun(fixture.repository, fixture.taskID, fixture.runID)
+			requireRuntimeError(t, err)
+		})
+	}
+}
+
 func TestIntegerLimitPreservesHandledMalformedJSONCategories(t *testing.T) {
 	tests := []struct {
 		name string
@@ -772,6 +841,101 @@ func TestIntegerLimitPreservesHandledMalformedJSONCategories(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunJSONDepthLimitClassification(t *testing.T) {
+	depth1000 := nestedArrayJSON(1000, "0")
+	depth10000 := nestedArrayJSON(10000, "0")
+	manifestFiles := []string{
+		"task.json", "source-before-checks.json", "source-after-checks.json", "changed-files.json",
+		"diff.patch", "checks.json", "checks/000-unit-test.stdout", "checks/000-unit-test.stderr", "verification.json",
+	}
+
+	t.Run("matching Task extra at depth 1000 passes", func(t *testing.T) {
+		fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+		appendRawJSONField(t, fixture.taskPath, "compat_extra", depth1000)
+		appendRawJSONField(t, filepath.Join(fixture.runPath, "task.json"), "compat_extra", depth1000)
+		writeManifest(t, fixture.runPath, fixture.taskID, fixture.runID, manifestFiles)
+		if _, err := validateRunWithoutWrites(t, fixture); err != nil {
+			t.Fatalf("ValidateRun() rejected matching depth-1000 Task extras: %v", err)
+		}
+	})
+
+	t.Run("saved Task depth limit is Runtime", func(t *testing.T) {
+		fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+		appendRawJSONField(t, fixture.taskPath, "compat_extra", depth10000)
+		_, err := validateRunWithoutWrites(t, fixture)
+		requireRuntimeError(t, err)
+		want := "Saved Task snapshot '" + fixture.taskID + "' exceeds the supported JSON nesting depth."
+		if err.Error() != want {
+			t.Fatalf("ValidateRun() error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("Evidence Task depth limit is Runtime", func(t *testing.T) {
+		fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+		appendRawJSONField(t, filepath.Join(fixture.runPath, "task.json"), "compat_extra", depth10000)
+		_, err := validateRunWithoutWrites(t, fixture)
+		requireRuntimeError(t, err)
+		const want = "Evidence file 'task.json' exceeds the supported JSON nesting depth."
+		if err.Error() != want {
+			t.Fatalf("ValidateRun() error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("decodable deep Task mismatch is Identity", func(t *testing.T) {
+		fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+		appendRawJSONField(t, fixture.taskPath, "compat_extra", depth1000)
+		appendRawJSONField(t, filepath.Join(fixture.runPath, "task.json"), "compat_extra", nestedArrayJSON(1000, "1"))
+		_, err := validateRunWithoutWrites(t, fixture)
+		if err == nil || KindOf(err) != KindInvalidInput {
+			t.Fatalf("ValidateRun() error = %v, kind = %v, want Identity", err, KindOf(err))
+		}
+	})
+
+	t.Run("non-Task Evidence depth limits remain Evidence", func(t *testing.T) {
+		for _, relativePath := range []string{
+			"checks.json",
+			"verification.json",
+			"source-before-checks.json",
+			"run-manifest.json",
+		} {
+			t.Run(relativePath, func(t *testing.T) {
+				fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+				appendRawJSONField(t, filepath.Join(fixture.runPath, relativePath), "compat_extra", depth10000)
+				_, err := validateRunWithoutWrites(t, fixture)
+				if err == nil || KindOf(err) != KindEvidence {
+					t.Fatalf("ValidateRun() error = %v, kind = %v, want Evidence", err, KindOf(err))
+				}
+			})
+		}
+	})
+
+	t.Run("invalid raw UTF-8 saved Task remains Identity", func(t *testing.T) {
+		fixture := newRunFixture(t, fixtureOptions{required: true, passed: true, exitCode: 0, sourceStable: true})
+		contents := []byte{'{', '"', 'v', 'a', 'l', 'u', 'e', '"', ':', '"', 0xff, '"', '}'}
+		if err := os.WriteFile(fixture.taskPath, contents, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := validateRunWithoutWrites(t, fixture)
+		if err == nil || KindOf(err) != KindInvalidInput {
+			t.Fatalf("ValidateRun() error = %v, kind = %v, want Identity", err, KindOf(err))
+		}
+		want := "Saved Task snapshot '" + fixture.taskID + "' is unreadable or invalid JSON."
+		if err.Error() != want {
+			t.Fatalf("ValidateRun() error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("stdlib depth failure remains internally classifiable", func(t *testing.T) {
+		_, err := decodeJSONObject([]byte(`{"value":` + depth10000 + `}`))
+		if err == nil || !isStandardJSONDepthLimit(err) {
+			t.Fatalf("decodeJSONObject() error = %v, want standard-library depth limit", err)
+		}
+		if KindOf(err) != KindUnknown {
+			t.Fatalf("KindOf(%v) = %v, want unknown before boundary mapping", err, KindOf(err))
+		}
+	})
 }
 
 func newRunFixture(t *testing.T, options fixtureOptions) runFixture {
@@ -992,6 +1156,10 @@ func appendRawJSONField(t *testing.T, path, name, rawValue string) {
 	}
 }
 
+func nestedArrayJSON(depth int, leaf string) string {
+	return strings.Repeat("[", depth) + leaf + strings.Repeat("]", depth)
+}
+
 func replaceRawJSONField(t *testing.T, path, name, oldValue, newValue string) {
 	t.Helper()
 	contents, err := os.ReadFile(path)
@@ -1021,6 +1189,17 @@ func requireRuntimeError(t *testing.T, err error) {
 	if !errors.As(err, &runtimeError) {
 		t.Fatalf("error type = %T, want *RuntimeError", err)
 	}
+}
+
+func validateRunWithoutWrites(t *testing.T, fixture runFixture) (*ValidatedRun, error) {
+	t.Helper()
+	before := snapshotTree(t, fixture.repository)
+	validated, err := ValidateRun(fixture.repository, fixture.taskID, fixture.runID)
+	after := snapshotTree(t, fixture.repository)
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("ValidateRun() changed repository tree\nbefore: %#v\nafter:  %#v", before, after)
+	}
+	return validated, err
 }
 
 func snapshotTree(t *testing.T, root string) map[string]string {

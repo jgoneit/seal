@@ -230,6 +230,9 @@ func readEvidenceJSON(runDirectory, relativePath string) (jsonObject, error) {
 	}
 	value, err := decodeJSONObject(contents)
 	if err != nil {
+		if relativePath == "task.json" && isStandardJSONDepthLimit(err) {
+			return nil, &RuntimeError{message: "Evidence file 'task.json' exceeds the supported JSON nesting depth."}
+		}
 		if KindOf(err) == KindRuntime {
 			return nil, err
 		}
