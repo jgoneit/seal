@@ -130,6 +130,53 @@ func TestRunRecordsReferenceContractAndContinues(t *testing.T) {
 	}
 }
 
+func TestRunRootedKeepsLogsInRetainedEvidenceDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory-handle rename fixture is POSIX-only")
+	}
+	repository := t.TempDir()
+	rootDirectory := t.TempDir()
+	evidence := privateDirectoryAt(t, filepath.Join(rootDirectory, "evidence"))
+	root, err := os.OpenRoot(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	moved := filepath.Join(rootDirectory, "retained")
+	if err := os.Rename(evidence, moved); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(rootDirectory, "outside")
+	if err := os.Mkdir(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "sentinel"), []byte("unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, evidence); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := RunRooted([]Definition{{
+		Name:     "missing",
+		Argv:     []string{filepath.Join(repository, "missing-executable")},
+		Required: true,
+	}}, repository, root)
+	if err != nil {
+		t.Fatalf("RunRooted(): %v", err)
+	}
+	if len(results) != 1 || results[0].ExitCode != nil || results[0].Passed {
+		t.Fatalf("results = %#v", results)
+	}
+	if _, err := os.Stat(filepath.Join(moved, filepath.FromSlash(results[0].StderrPath))); err != nil {
+		t.Fatalf("retained-root stderr missing: %v", err)
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "sentinel" {
+		t.Fatalf("outside path changed: entries %v, error %v", entries, err)
+	}
+}
+
 func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
