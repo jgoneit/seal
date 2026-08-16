@@ -79,6 +79,7 @@ type completeHooks struct {
 	now               func() time.Time
 	writerFault       func(string) error
 	tempNameGenerator func() (string, error)
+	tempHooks         completionTempHooks
 }
 
 func completeWithHooks(cwd, taskID, runID string, hooks completeHooks) (*CompletionRun, error) {

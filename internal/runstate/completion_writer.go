@@ -20,6 +20,7 @@ type completionStore struct {
 	runID      string
 	fault      func(string) error
 	name       func() (string, error)
+	tempHooks  completionTempHooks
 }
 
 func openCompletionStore(validated *ValidatedRun, hooks completeHooks) (*completionStore, error) {
@@ -54,6 +55,7 @@ func openCompletionStore(validated *ValidatedRun, hooks completeHooks) (*complet
 		runID:      validated.runID,
 		fault:      hooks.writerFault,
 		name:       hooks.tempNameGenerator,
+		tempHooks:  hooks.tempHooks,
 	}
 	if err := store.validateBinding(); err != nil {
 		_ = run.Close()
@@ -161,7 +163,7 @@ func (store *completionStore) publish(validated *ValidatedRun, contents []byte) 
 			return nil, completionEvidenceError("Could not allocate a private completion staging name.", err)
 		}
 		var createdInfo fs.FileInfo
-		file, createdInfo, err = createPrivateCompletionTemp(store.run, generated)
+		file, createdInfo, err = createPrivateCompletionTempWithHooks(store.run, generated, store.tempHooks)
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}

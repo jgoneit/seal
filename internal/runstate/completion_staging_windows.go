@@ -13,6 +13,10 @@ import (
 )
 
 func createPrivateCompletionTemp(root *os.Root, name string) (*os.File, fs.FileInfo, error) {
+	return createPrivateCompletionTempWithHooks(root, name, completionTempHooks{})
+}
+
+func createPrivateCompletionTempWithHooks(root *os.Root, name string, hooks completionTempHooks) (*os.File, fs.FileInfo, error) {
 	if err := validateRelativeName(name); err != nil {
 		return nil, nil, err
 	}
@@ -106,15 +110,50 @@ func createPrivateCompletionTemp(root *os.Root, name string) (*os.File, fs.FileI
 	if err != nil {
 		return nil, nil, ntStatusErrno(err)
 	}
-	file := os.NewFile(uintptr(handle), name)
-	if file == nil {
-		closeErr := windows.CloseHandle(handle)
-		return nil, nil, errors.Join(windows.ERROR_INVALID_HANDLE, closeErr)
+	newFile := hooks.newFile
+	if newFile == nil {
+		newFile = os.NewFile
 	}
-	info, err := file.Stat()
+	file := newFile(uintptr(handle), name)
+	if file == nil {
+		cleanupErr := cleanupCompletionHandle(handle)
+		return nil, nil, errors.Join(windows.ERROR_INVALID_HANDLE, cleanupErr)
+	}
+	stat := hooks.stat
+	if stat == nil {
+		stat = func(file *os.File) (fs.FileInfo, error) { return file.Stat() }
+	}
+	info, err := stat(file)
 	if err != nil {
-		_ = file.Close()
-		return nil, nil, err
+		cleanupErr := cleanupCompletionFile(file)
+		return nil, nil, errors.Join(err, cleanupErr)
 	}
 	return file, info, nil
+}
+
+func cleanupCompletionFile(file *os.File) error {
+	handle := windows.Handle(file.Fd())
+	var status windows.IO_STATUS_BLOCK
+	deleteFile := byte(1)
+	deleteErr := windows.NtSetInformationFile(
+		handle,
+		&status,
+		&deleteFile,
+		uint32(unsafe.Sizeof(deleteFile)),
+		windows.FileDispositionInformation,
+	)
+	return errors.Join(ntStatusErrno(deleteErr), file.Close())
+}
+
+func cleanupCompletionHandle(handle windows.Handle) error {
+	var status windows.IO_STATUS_BLOCK
+	deleteFile := byte(1)
+	deleteErr := windows.NtSetInformationFile(
+		handle,
+		&status,
+		&deleteFile,
+		uint32(unsafe.Sizeof(deleteFile)),
+		windows.FileDispositionInformation,
+	)
+	return errors.Join(ntStatusErrno(deleteErr), windows.CloseHandle(handle))
 }
