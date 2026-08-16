@@ -66,6 +66,7 @@ seal task create --file <TASK_JSON> [--force]
 seal task show <TASK_ID>
 seal verify <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
+seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
 The Task-create writer contract, including its frozen runtime-exit categories
@@ -74,9 +75,9 @@ recorded in `conformance/task-create-contract.md`. The Verify contract,
 including process control, source observation, manifest semantics, writer
 confinement, and whole-directory publication, is recorded in
 `conformance/verify-contract.md`. The separately approved Go v1 Completion
-policy target and immutable v2 record are recorded before implementation in
+policy transition and immutable v2 record are implemented against
 `conformance/complete-contract.md`. The implemented slices do not infer a
-latest identity, execute a reviewer, read Verdict, or yet implement Completion.
+latest identity, execute a reviewer, or read Verdict.
 
 ## Conformance artifacts
 

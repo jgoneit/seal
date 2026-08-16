@@ -146,8 +146,9 @@ record is preserved and is not rolled back.
 This transition does not add Bundle, Verdict, Reviewer, retry, repair, latest
 identity, or automatic execution behavior. The complete external contract,
 record schema, idempotency rule, and failure precedence are frozen in
-[`conformance/complete-contract.md`](conformance/complete-contract.md) before
-implementation.
+[`conformance/complete-contract.md`](conformance/complete-contract.md). The
+policy was approved before implementation and is now represented by the public
+command and its conformance tests.
 
 ## Explicit exclusions
 

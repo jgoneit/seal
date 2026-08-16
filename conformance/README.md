@@ -14,9 +14,8 @@ The Go command spelling changes only the executable name to `seal`. The separate
 `cmd/seal/task_create_conformance_test.go`. The separate `verify-contract.md`
 records the check runner, S0/S1 source observation, Evidence documents,
 manifest, and publication boundary. The separate `complete-contract.md` records
-the approved Go v1 Completion policy transition and immutable v2 record before
-that command is implemented. Verdict, latest-id selection, retry, and repair
-remain outside these slices.
+the implemented Go v1 Completion policy transition and immutable v2 record.
+Verdict, latest-id selection, retry, and repair remain outside these slices.
 
 The closed Task-create matrix contains 102 classified cases: 88 exact
 Reference-contract cases, 14 approved Go writer divergences, and zero blocked

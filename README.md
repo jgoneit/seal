@@ -28,7 +28,9 @@ The canonical implementation has not switched to Go. This repository does not
 translate the Python package structure. Its current compatibility surface
 creates normalized Task snapshots, records manifest-valid Evidence for one
 explicit Task, and provides exact-identity queries for stored Tasks and Runs
-under `.seal`. The Python reference remains canonical.
+under `.seal`. It also evaluates one explicit Run against current source under
+the approved Go v1 Basic Completion policy. The Python reference remains
+canonical for the compatibility meanings identified in `REFERENCE.md`.
 
 ## Current CLI
 
@@ -41,6 +43,7 @@ seal task create --file <TASK_JSON> [--force]
 seal task show <TASK_ID>
 seal verify <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
+seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
 The development version is `0.0.0-dev`.
@@ -66,10 +69,14 @@ then returns the transient `validated-run-summary/v1` view. A structurally
 valid failed Run still returns exit 0; missing, unsafe, unsupported, tampered,
 or contradictory Evidence returns exit 8.
 
-Seal does not yet implement `complete`, Bundle, Verdict, Reviewer, or installer
-behavior. It does not collect Completion source S2, decide acceptance, infer a
-latest identity, retry, repair, or invoke another Toolkit module, and it has no
-`.harness` fallback.
+`complete` validates one exact Run, observes current source as S2, applies the
+fixed Basic Acceptance gates, and atomically records or reuses an immutable v2
+`completion.json`. Only `verifier.required=false` is supported for Completion;
+`verifier.required=true` returns exit 7, and Verdict files are not inputs.
+
+Seal does not implement Bundle, Verdict, Reviewer, or installer behavior. It
+does not infer a latest identity, retry, repair, rerun checks during Completion,
+or invoke another Toolkit module, and it has no `.harness` fallback.
 
 To exercise the candidate from a Go checkout:
 
@@ -80,6 +87,7 @@ go run ./cmd/seal task create --file <TASK_JSON> [--force]
 go run ./cmd/seal task show <TASK_ID>
 go run ./cmd/seal verify <TASK_ID>
 go run ./cmd/seal run show <TASK_ID> --run-id <RUN_ID>
+go run ./cmd/seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
 There is no release asset or installer yet. The long-term distribution target
@@ -95,13 +103,14 @@ established Acceptance meaning and outcomes, not new product design.
 The first compatibility slice covers exact read-only `task show` and `run show`
 identities using fixtures derived from the frozen reference. The second covers
 the normalized `task create` snapshot writer. The third records one explicit
-manifest-valid Evidence Run with `verify`. See
+manifest-valid Evidence Run with `verify`. The fourth evaluates one explicit
+Run under the approved Go v1 Basic Completion transition. See
 [the read-only contract](conformance/read-only-contract.md),
 [the Task-create contract](conformance/task-create-contract.md),
 [the Verify contract](conformance/verify-contract.md), and
-[fixture provenance](conformance/README.md). These slices do not add
-Completion, retries, repair, latest-Run inference, reviewer execution, or
-workflow orchestration.
+[the Completion contract](conformance/complete-contract.md), together with
+[fixture provenance](conformance/README.md). These slices do not add retries,
+repair, latest-Run inference, reviewer execution, or workflow orchestration.
 
 See [MIGRATION_CHARTER.md](MIGRATION_CHARTER.md) for the migration invariants and
 [REFERENCE.md](REFERENCE.md) for the frozen reference identity.

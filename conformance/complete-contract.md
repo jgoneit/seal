@@ -1,6 +1,6 @@
 # Go v1 Completion contract
 
-This contract approves, before implementation, the Go v1 behavior of:
+This contract defines the implemented Go v1 behavior of:
 
 ```text
 seal complete <TASK_ID> --run-id <RUN_ID>
@@ -14,8 +14,8 @@ Completion policy itself makes the explicit canonical transition recorded in
 Verdict artifacts, and it writes an immutable schema-version-2 record rather
 than the mutable Legacy schema-version-1 record.
 
-This document does not claim that the command is already implemented. It
-freezes the implementation target and its conformance tests.
+The policy was approved before implementation and is now frozen by the command,
+core, and conformance tests.
 
 ## Public result and exits
 
@@ -23,6 +23,13 @@ The command requires one exact Task identity and an explicit exact Run
 identity. It never selects a latest Run. Successful stdout retains the Legacy
 three-field shape as one UTF-8 JSON object followed by one newline; stderr is
 empty.
+
+The public option spellings are exact: only `-h`, `--help`, and `--run-id` are
+accepted. Go does not reproduce `argparse`'s incidental long-option prefix
+abbreviations such as `--r` or its position-dependent trailing-`--` quirk.
+`--run-id=<RUN_ID>`, option-first order, and repeated `--run-id` with the last
+value winning remain supported. A `--` terminator stops option and help
+recognition.
 
 ```json
 {
@@ -215,6 +222,13 @@ winner or unsafe destination is exit `8`.
 No-clobber publication protects an existing record from Complete itself. It
 does not make the repository immutable against another process running as the
 same operating-system user.
+
+Publication uses the platform's native no-replace rename primitive on supported
+local Linux, macOS, and Windows filesystems. The contract does not claim atomic
+rename or crash-durability guarantees for network filesystems, FUSE, or other
+filesystems whose semantics differ from ordinary local POSIX filesystems or
+NTFS. Platform support is gated by native CI rather than cross-compilation
+alone.
 
 ## Explicit exclusions
 
