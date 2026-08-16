@@ -27,7 +27,7 @@ Options:
   --file <TASK_JSON>  Read a Task Spec from this file.
   --force             Replace the exact existing Task snapshot.
   --help              Show this help text.
-  --version           Print the development version.
+  --version           Print the Seal version.
 
 Task creation validates and stores one normalized Task snapshot.
 Verification records one exact-identity, manifest-valid Evidence Run.

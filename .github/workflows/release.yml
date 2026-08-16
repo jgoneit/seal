@@ -1,0 +1,380 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-unix:
+    name: Build ${{ matrix.goos }} ${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+          cache: false
+
+      - name: Verify tag identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" != "tag" ]]; then
+            printf '%s\n' "${GITHUB_REF_NAME} is not an annotated tag" >&2
+            exit 1
+          fi
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]]; then
+            printf '%s\n' "release tag must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          if [[ -z "${version}" || "v${version}" != "${GITHUB_REF_NAME}" ]]; then
+            printf '%s\n' "invalid release tag: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
+          printf 'asset=seal_%s_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz\n' "${version}" >>"${GITHUB_OUTPUT}"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build and smoke-test native binary
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_ASSET: ${{ steps.release.outputs.asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/seal-stage" dist
+          go build -trimpath -o "${RUNNER_TEMP}/seal-stage/seal" ./cmd/seal
+          "${RUNNER_TEMP}/seal-stage/seal" --help >/dev/null
+          printf '%s\n' "${RELEASE_VERSION}" >"${RUNNER_TEMP}/expected-version.txt"
+          if ! "${RUNNER_TEMP}/seal-stage/seal" --version >"${RUNNER_TEMP}/actual-version.txt" 2>"${RUNNER_TEMP}/actual-version.err"; then
+            printf '%s\n' "seal --version failed" >&2
+            exit 1
+          fi
+          if [[ -s "${RUNNER_TEMP}/actual-version.err" ]] || ! cmp -s "${RUNNER_TEMP}/expected-version.txt" "${RUNNER_TEMP}/actual-version.txt"; then
+            printf 'binary version output does not exactly match tag version %s\n' "${RELEASE_VERSION}" >&2
+            exit 1
+          fi
+          tar -C "${RUNNER_TEMP}/seal-stage" -czf "dist/${RELEASE_ASSET}" seal
+
+      - name: Upload native asset
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.release.outputs.asset }}
+          path: dist/${{ steps.release.outputs.asset }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  build-windows:
+    name: Build windows amd64
+    runs-on: windows-2025
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+          cache: false
+
+      - name: Verify tag identity
+        id: release
+        shell: pwsh
+        run: |
+          $tagType = git cat-file -t "refs/tags/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0 -or $tagType -cne "tag") {
+            throw "$env:GITHUB_REF_NAME is not an annotated tag"
+          }
+          if ($env:GITHUB_REF_NAME -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$') {
+            throw "release tag must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N: $env:GITHUB_REF_NAME"
+          }
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          if ([string]::IsNullOrEmpty($version) -or "v$version" -cne $env:GITHUB_REF_NAME) {
+            throw "invalid release tag: $env:GITHUB_REF_NAME"
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "asset=seal_${version}_windows_amd64.zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build and smoke-test native binary
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_ASSET: ${{ steps.release.outputs.asset }}
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "seal-stage"
+          $dist = Join-Path $env:GITHUB_WORKSPACE "dist"
+          New-Item -ItemType Directory -Force -Path $stage, $dist | Out-Null
+          $binary = Join-Path $stage "seal.exe"
+          go build -trimpath -o $binary ./cmd/seal
+          if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+          & $binary --help | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "seal --help failed" }
+          $versionError = Join-Path $env:RUNNER_TEMP "release-version.err"
+          $actualVersion = @(& $binary --version 2> $versionError)
+          if ($LASTEXITCODE -ne 0 -or (Get-Item -LiteralPath $versionError).Length -ne 0 -or $actualVersion.Count -ne 1 -or ([string]$actualVersion[0]) -cne $env:RELEASE_VERSION) {
+            throw "binary version output does not exactly match tag version $env:RELEASE_VERSION"
+          }
+          Compress-Archive -LiteralPath $binary -DestinationPath (Join-Path $dist $env:RELEASE_ASSET)
+
+      - name: Upload native asset
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.release.outputs.asset }}
+          path: dist/${{ steps.release.outputs.asset }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - build-unix
+      - build-windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download native assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify assets and write sorted checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" != "tag" ]]; then
+            printf '%s\n' "${GITHUB_REF_NAME} is not an annotated tag" >&2
+            exit 1
+          fi
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]]; then
+            printf '%s\n' "release tag must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          expected="${RUNNER_TEMP}/expected-assets.txt"
+          actual="${RUNNER_TEMP}/actual-assets.txt"
+          {
+            printf 'seal_%s_linux_amd64.tar.gz\n' "${version}"
+            printf 'seal_%s_linux_arm64.tar.gz\n' "${version}"
+            printf 'seal_%s_darwin_amd64.tar.gz\n' "${version}"
+            printf 'seal_%s_darwin_arm64.tar.gz\n' "${version}"
+            printf 'seal_%s_windows_amd64.zip\n' "${version}"
+          } | LC_ALL=C sort >"${expected}"
+          find dist -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort >"${actual}"
+          diff -u "${expected}" "${actual}"
+          (
+            cd dist
+            while IFS= read -r asset; do
+              sha256sum "${asset}"
+            done <"${expected}"
+          ) >dist/checksums.txt
+
+      - name: Publish immutable release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            printf '%s\n' "release ${GITHUB_REF_NAME} already exists; tags and releases are not reused" >&2
+            exit 1
+          fi
+          # Every release starts as a non-Latest prerelease. A stable tag is
+          # promoted only after both public installers pass below.
+          release_flags=(--verify-tag --generate-notes --title "Seal ${GITHUB_REF_NAME}" --prerelease --latest=false)
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/seal_* \
+            dist/checksums.txt \
+            "${release_flags[@]}"
+
+  smoke-install-unix:
+    name: Install published ${{ matrix.goos }} ${{ matrix.goarch }}
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install published release
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_home="${RUNNER_TEMP}/seal-install-home"
+          install_tmp="${RUNNER_TEMP}/seal-install-tmp"
+          output="${RUNNER_TEMP}/seal-install.out"
+          error_output="${RUNNER_TEMP}/seal-install.err"
+          mkdir -p "${install_home}" "${install_tmp}"
+          target="${install_home}/.local/bin/seal"
+          if [[ -e "${target}" || -L "${target}" ]]; then
+            printf '%s\n' "clean-install target already exists" >&2
+            exit 1
+          fi
+          if ! HOME="${install_home}" TMPDIR="${install_tmp}" SEAL_RELEASE_BASE_URL= sh ./install.sh --version "${GITHUB_REF_NAME}" >"${output}" 2>"${error_output}"; then
+            cat "${output}" >&2
+            cat "${error_output}" >&2
+            exit 1
+          fi
+          if [[ -s "${error_output}" ]]; then
+            printf '%s\n' "installer wrote unexpected stderr" >&2
+            cat "${error_output}" >&2
+            exit 1
+          fi
+          expected_version="${GITHUB_REF_NAME#v}"
+          actual_version="$("${target}" --version)"
+          if [[ "${actual_version}" != "${expected_version}" ]]; then
+            printf 'installed version mismatch: got %s, want %s\n' "${actual_version}" "${expected_version}" >&2
+            exit 1
+          fi
+          if ! grep -Fq "${target}" "${output}"; then
+            printf '%s\n' "installer output omitted the absolute target" >&2
+            exit 1
+          fi
+          shopt -s nullglob dotglob
+          residue=("${install_home}/.local/bin"/.seal-*)
+          if (( ${#residue[@]} != 0 )); then
+            printf '%s\n' "installer left staging or backup residue" >&2
+            exit 1
+          fi
+          temporary_residue=("${install_tmp}"/*)
+          if (( ${#temporary_residue[@]} != 0 )); then
+            printf '%s\n' "installer left download or extraction residue" >&2
+            exit 1
+          fi
+
+  smoke-install-windows:
+    name: Install published windows amd64
+    needs: publish
+    runs-on: windows-2025
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install published release
+        shell: pwsh
+        run: |
+          $localAppData = Join-Path $env:RUNNER_TEMP "seal-install-localappdata"
+          $temporaryRoot = Join-Path $env:RUNNER_TEMP "seal-install-tmp"
+          $outputPath = Join-Path $env:RUNNER_TEMP "seal-install.out"
+          $errorPath = Join-Path $env:RUNNER_TEMP "seal-install.err"
+          New-Item -ItemType Directory -Force -Path $localAppData, $temporaryRoot | Out-Null
+          $env:LOCALAPPDATA = $localAppData
+          $env:TEMP = $temporaryRoot
+          $env:TMP = $temporaryRoot
+          Remove-Item Env:SEAL_RELEASE_BASE_URL -ErrorAction SilentlyContinue
+          $target = Join-Path $localAppData "Programs\Seal\bin\seal.exe"
+          if (Test-Path -LiteralPath $target) {
+            throw "clean-install target already exists"
+          }
+          $windowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+          if (-not [System.IO.File]::Exists($windowsPowerShell)) {
+            throw "Windows PowerShell 5.1 is unavailable at $windowsPowerShell"
+          }
+          & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -Version $env:GITHUB_REF_NAME 1> $outputPath 2> $errorPath
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content -LiteralPath $outputPath -ErrorAction SilentlyContinue | Write-Error
+            Get-Content -LiteralPath $errorPath -ErrorAction SilentlyContinue | Write-Error
+            throw "published installer failed"
+          }
+          if ((Get-Item -LiteralPath $errorPath).Length -ne 0) {
+            Get-Content -LiteralPath $errorPath | Write-Error
+            throw "installer wrote unexpected stderr"
+          }
+          $versionError = Join-Path $env:RUNNER_TEMP "installed-version.err"
+          $actualVersion = @(& $target --version 2> $versionError)
+          $expectedVersion = $env:GITHUB_REF_NAME.Substring(1)
+          if ($LASTEXITCODE -ne 0 -or (Get-Item -LiteralPath $versionError).Length -ne 0 -or $actualVersion.Count -ne 1 -or ([string]$actualVersion[0]) -cne $expectedVersion) {
+            throw "installed version does not exactly match $expectedVersion"
+          }
+          if (-not (Select-String -LiteralPath $outputPath -SimpleMatch $target -Quiet)) {
+            throw "installer output omitted the absolute target"
+          }
+          $installDirectory = Split-Path -Parent $target
+          $residue = @(Get-ChildItem -LiteralPath $installDirectory -Force | Where-Object { $_.Name -like '.seal-*' })
+          if ($residue.Count -ne 0) {
+            throw "installer left staging or backup residue: $($residue.FullName -join ', ')"
+          }
+          $temporaryResidue = @(Get-ChildItem -LiteralPath $temporaryRoot -Force)
+          if ($temporaryResidue.Count -ne 0) {
+            throw "installer left download or extraction residue: $($temporaryResidue.FullName -join ', ')"
+          }
+
+  promote-stable:
+    name: Promote stable Release
+    if: ${{ !contains(github.ref_name, '-rc.') }}
+    needs:
+      - smoke-install-unix
+      - smoke-install-windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Mark validated stable Release latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --prerelease=false --latest
