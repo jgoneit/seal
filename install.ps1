@@ -32,12 +32,24 @@ function Get-SealFileOperationException {
 
     $current = $Exception
     while ($null -ne $current) {
-        if ($current -is [System.IO.IOException] -or $current -is [System.UnauthorizedAccessException]) {
+        if ($current -is [System.IO.IOException] -or $current -is [System.UnauthorizedAccessException] -or $current -is [System.ComponentModel.Win32Exception]) {
             return $current
         }
         $current = $current.InnerException
     }
     return $null
+}
+
+function Get-SealFileOperationCode {
+    param([System.Exception]$Exception)
+
+    if ($null -eq $Exception) {
+        return -1
+    }
+    if ($Exception -is [System.ComponentModel.Win32Exception]) {
+        return $Exception.NativeErrorCode
+    }
+    return $Exception.HResult -band 0xffff
 }
 
 if ($args.Count -ne 2 -or $args[0] -cne "-Version") {
@@ -69,6 +81,7 @@ try {
     }
     Add-Type -TypeDefinition @'
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 public static class SealNativeSystemInfo
@@ -97,6 +110,26 @@ public static class SealNativeSystemInfo
         SYSTEM_INFO systemInfo;
         GetNativeSystemInfo(out systemInfo);
         return systemInfo.ProcessorArchitecture;
+    }
+}
+
+public static class SealNativeFile
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "ReplaceFileW", SetLastError = true)]
+    private static extern bool ReplaceFile(
+        string replacedFileName,
+        string replacementFileName,
+        string backupFileName,
+        uint replaceFlags,
+        IntPtr exclude,
+        IntPtr reserved);
+
+    public static void ReplaceWithoutBackup(string replacementFileName, string replacedFileName)
+    {
+        if (!ReplaceFile(replacedFileName, replacementFileName, null, 0, IntPtr.Zero, IntPtr.Zero))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
     }
 }
 '@
@@ -261,14 +294,14 @@ public static class SealNativeSystemInfo
                                 if ((Get-SealFileSHA256 $target) -cne $candidateSHA256) {
                                     throw (Get-SealInstallerException "the install target changed before rollback.")
                                 }
-                                [System.IO.File]::Replace($destinationBackup, $target, $null, $true)
+                                [SealNativeFile]::ReplaceWithoutBackup($destinationBackup, $target)
                             } else {
                                 [System.IO.File]::Move($destinationBackup, $target)
                             }
                             break
                         } catch {
                             $restoreError = Get-SealFileOperationException $_.Exception
-                            $restoreCode = if ($null -eq $restoreError) { -1 } else { $restoreError.HResult -band 0xffff }
+                            $restoreCode = Get-SealFileOperationCode $restoreError
                             $retryableRestore = $restoreCode -eq 5 -or $restoreCode -eq 32 -or $restoreCode -eq 33 -or $restoreCode -eq 1175 -or $restoreCode -eq 1224
                             $restoreNamesIntact = [System.IO.File]::Exists($destinationBackup) -and [System.IO.File]::Exists($target)
                             if (-not $retryableRestore -or -not $restoreNamesIntact -or $restoreTimer.Elapsed -ge [System.TimeSpan]::FromSeconds(5)) {
@@ -302,7 +335,7 @@ public static class SealNativeSystemInfo
                             break
                         } catch {
                             $deleteError = Get-SealFileOperationException $_.Exception
-                            $deleteCode = if ($null -eq $deleteError) { -1 } else { $deleteError.HResult -band 0xffff }
+                            $deleteCode = Get-SealFileOperationCode $deleteError
                             $retryableDelete = $deleteCode -eq 5 -or $deleteCode -eq 32 -or $deleteCode -eq 33 -or $deleteCode -eq 1224
                             if (-not $retryableDelete -or -not [System.IO.File]::Exists($target) -or $deleteTimer.Elapsed -ge [System.TimeSpan]::FromSeconds(5)) {
                                 throw
@@ -323,12 +356,13 @@ public static class SealNativeSystemInfo
                 }
             }
             $rollbackHResult = "0x{0:x8}" -f $rollbackError.HResult
+            $rollbackCode = Get-SealFileOperationCode $rollbackError
             if ($null -ne $destinationBackup -and [System.IO.File]::Exists($destinationBackup)) {
                 $preservedBackup = $destinationBackup
                 $destinationBackup = $null
-                [Console]::Error.WriteLine("seal installer: rollback failed; the prior binary remains at $preservedBackup; $($rollbackError.GetType().FullName) $rollbackHResult`: $($rollbackError.Message)")
+                [Console]::Error.WriteLine("seal installer: rollback failed; the prior binary remains at $preservedBackup; $($rollbackError.GetType().FullName) HResult $rollbackHResult, Win32 $rollbackCode`: $($rollbackError.Message)")
             } else {
-                [Console]::Error.WriteLine("seal installer: rollback failed; $($rollbackError.GetType().FullName) $rollbackHResult`: $($rollbackError.Message)")
+                [Console]::Error.WriteLine("seal installer: rollback failed; $($rollbackError.GetType().FullName) HResult $rollbackHResult, Win32 $rollbackCode`: $($rollbackError.Message)")
             }
         }
     }
