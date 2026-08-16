@@ -863,45 +863,27 @@ func TestTaskCreateContractAcceptedCLIForms(t *testing.T) {
 	}
 }
 
-func TestTaskCreateContractBlockedReferenceEdges(t *testing.T) {
-	t.Run("invalid UTF-8 input or catalog", func(t *testing.T) {
-		t.Skip("blocked exit-class conflict: frozen decoding escapes as exit 1, while G2 classifies malformed input and catalog data as exit 2")
-	})
-	t.Run("4301-digit integer token", func(t *testing.T) {
-		t.Skip("blocked exit-class conflict: frozen CPython conversion escapes as exit 1, while G2 otherwise names only exits 0, 2, and 3")
-	})
-	t.Run("input aliases destination", func(t *testing.T) {
-		t.Skip("blocked contract conflict: frozen --force mutates an input file that aliases the destination, while G2 requires input immutability")
-	})
-	t.Run("catalog aliases destination", func(t *testing.T) {
-		t.Skip("blocked contract conflict: frozen --force mutates a catalog target that aliases the destination, while G2 requires catalog immutability")
-	})
-	t.Run("lone surrogate rendering", func(t *testing.T) {
-		t.Skip("blocked contract conflict: frozen rendering exits 1 after leaving a zero-byte destination, while G2 requires atomic failure with the destination unchanged")
-	})
-}
-
-func TestTaskCreateCandidateBlockedEdgesFailClosedWithoutWrites(t *testing.T) {
-	assertRejectedUnchanged := func(t *testing.T, fixture createContractFixture, arguments ...string) {
-		t.Helper()
-		before := createContractSnapshotTree(t, fixture.repository)
-		result := createContractInvoke(fixture.repository, arguments...)
-		createContractAssertHandledError(t, result, 2)
-		if after := createContractSnapshotTree(t, fixture.repository); !reflect.DeepEqual(after, before) {
-			t.Fatalf("blocked-edge rejection changed repository\nbefore: %#v\nafter:  %#v", before, after)
-		}
-	}
-
+func TestTaskCreateContractReferenceRuntimeFailuresWithoutWrites(t *testing.T) {
 	t.Run("invalid UTF-8 input", func(t *testing.T) {
 		fixture := createContractNewFixture(t, true)
 		createContractWriteRaw(t, fixture.input, []byte{0xff})
-		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			1,
+			"task", "create", "--file", fixture.input,
+		)
 	})
 
 	t.Run("invalid UTF-8 catalog", func(t *testing.T) {
 		fixture := createContractNewFixture(t, true)
 		createContractWriteRaw(t, createContractCatalogPath(fixture.repository), []byte{0xff})
-		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			1,
+			"task", "create", "--file", fixture.input,
+		)
 	})
 
 	t.Run("4301-digit integer token", func(t *testing.T) {
@@ -914,14 +896,26 @@ func TestTaskCreateCandidateBlockedEdgesFailClosedWithoutWrites(t *testing.T) {
 			"timeout_seconds": json.Number(strings.Repeat("9", 4301)),
 		}}
 		createContractWriteJSON(t, fixture.input, spec)
-		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			1,
+			"task", "create", "--file", fixture.input,
+		)
 	})
+}
 
+func TestTaskCreateApprovedDivergencesPreserveInputsAndDestinations(t *testing.T) {
 	t.Run("input aliases destination", func(t *testing.T) {
 		fixture := createContractNewFixture(t, true)
 		destination := createContractTaskPath(fixture.repository, createContractTaskID)
 		createContractWriteJSON(t, destination, createContractValidSpec())
-		assertRejectedUnchanged(t, fixture, "task", "create", "--file", destination, "--force")
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			2,
+			"task", "create", "--file", destination, "--force",
+		)
 	})
 
 	t.Run("catalog aliases destination", func(t *testing.T) {
@@ -939,21 +933,56 @@ func TestTaskCreateCandidateBlockedEdgesFailClosedWithoutWrites(t *testing.T) {
 		spec := createContractValidSpec()
 		spec["checks"] = []any{createContractCheck("inline")}
 		createContractWriteJSON(t, fixture.input, spec)
-		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input, "--force")
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			2,
+			"task", "create", "--file", fixture.input, "--force",
+		)
 	})
 
-	t.Run("lone surrogate rendering", func(t *testing.T) {
+	t.Run("lone surrogate leaves no first-create artifact", func(t *testing.T) {
 		fixture := createContractNewFixture(t, true)
-		contents := createContractReferenceJSON(t, createContractValidSpec())
-		contents = bytes.Replace(
-			contents,
-			[]byte("Create one deterministic Task snapshot."),
-			[]byte(`before\ud800after`),
-			1,
+		createContractWriteRaw(
+			t,
+			fixture.input,
+			createContractLoneSurrogateSpec(t),
 		)
-		createContractWriteRaw(t, fixture.input, contents)
-		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			1,
+			"task", "create", "--file", fixture.input,
+		)
 	})
+
+	t.Run("lone surrogate preserves forced destination", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		destination := createContractTaskPath(fixture.repository, createContractTaskID)
+		createContractWriteRaw(t, destination, []byte("existing snapshot bytes\n"))
+		createContractWriteRaw(
+			t,
+			fixture.input,
+			createContractLoneSurrogateSpec(t),
+		)
+		createContractAssertRejectedUnchanged(
+			t,
+			fixture,
+			1,
+			"task", "create", "--file", fixture.input, "--force",
+		)
+	})
+}
+
+func createContractLoneSurrogateSpec(t *testing.T) []byte {
+	t.Helper()
+	contents := createContractReferenceJSON(t, createContractValidSpec())
+	return bytes.Replace(
+		contents,
+		[]byte("Create one deterministic Task snapshot."),
+		[]byte(`before\ud800after`),
+		1,
+	)
 }
 
 func createContractNewFixture(t *testing.T, withHead bool) createContractFixture {
@@ -1112,6 +1141,21 @@ func createContractAssertHandledError(t *testing.T, result createContractResult,
 	t.Helper()
 	if result.code != code || len(result.stdout) != 0 || !strings.HasPrefix(result.stderr, "error: ") || strings.Count(result.stderr, "\n") != 1 {
 		t.Fatalf("result = code %d, stdout %q, stderr %q; want handled exit %d", result.code, result.stdout, result.stderr, code)
+	}
+}
+
+func createContractAssertRejectedUnchanged(
+	t *testing.T,
+	fixture createContractFixture,
+	code int,
+	arguments ...string,
+) {
+	t.Helper()
+	before := createContractSnapshotTree(t, fixture.repository)
+	result := createContractInvoke(fixture.repository, arguments...)
+	createContractAssertHandledError(t, result, code)
+	if after := createContractSnapshotTree(t, fixture.repository); !reflect.DeepEqual(after, before) {
+		t.Fatalf("task-create rejection changed repository\nbefore: %#v\nafter:  %#v", before, after)
 	}
 }
 
