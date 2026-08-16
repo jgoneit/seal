@@ -29,6 +29,12 @@ the resulting binary's `--help` and `--version`. Publication starts only after
 all five jobs succeed. The publish job rejects missing or additional archives,
 creates a bytewise filename-sorted `checksums.txt`, and creates the GitHub
 Release with those six files. Tags containing `-rc.` create prereleases.
+After publication, the workflow invokes the checked-in installer against the
+published tag from clean user-local directories on all five native runners. It
+requires the exact installed version and no staging or backup residue. A
+post-publication smoke failure leaves the immutable tag and Release in place
+for investigation; repair uses a new RC or patch version rather than replacing
+their assets.
 
 The workflow grants `contents: write` only to the publish job. All third-party
 workflow actions are official GitHub actions pinned to full commit SHAs. Seal
