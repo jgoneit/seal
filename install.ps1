@@ -6,6 +6,40 @@ function Get-SealInstallerException {
     return [System.InvalidOperationException]::new($Message)
 }
 
+function Get-SealFileSHA256 {
+    param([string]$Path)
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            $hashBytes = $sha256.ComputeHash($stream)
+        } finally {
+            $stream.Dispose()
+        }
+    } finally {
+        $sha256.Dispose()
+    }
+    $builder = [System.Text.StringBuilder]::new(64)
+    foreach ($hashByte in $hashBytes) {
+        [void]$builder.Append($hashByte.ToString("x2", [System.Globalization.CultureInfo]::InvariantCulture))
+    }
+    return $builder.ToString()
+}
+
+function Get-SealFileOperationException {
+    param([System.Exception]$Exception)
+
+    $current = $Exception
+    while ($null -ne $current) {
+        if ($current -is [System.IO.IOException] -or $current -is [System.UnauthorizedAccessException]) {
+            return $current
+        }
+        $current = $current.InnerException
+    }
+    return $null
+}
+
 if ($args.Count -ne 2 -or $args[0] -cne "-Version") {
     [Console]::Error.WriteLine("Usage: install.ps1 -Version <TAG>")
     exit 2
@@ -24,6 +58,9 @@ $destinationBackup = $null
 $target = $null
 $hadExistingTarget = $false
 $replacementPending = $false
+$replacementApplied = $false
+$candidateSHA256 = $null
+$originalTargetSHA256 = $null
 $installerExitCode = 0
 
 try {
@@ -111,22 +148,7 @@ public static class SealNativeSystemInfo
     if ($expectedChecksum -cnotmatch '^[0-9a-f]{64}$') {
         throw (Get-SealInstallerException "checksums.txt has an invalid SHA-256 for $asset.")
     }
-    $sha256 = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $archiveStream = [System.IO.File]::OpenRead($archivePath)
-        try {
-            $hashBytes = $sha256.ComputeHash($archiveStream)
-        } finally {
-            $archiveStream.Dispose()
-        }
-    } finally {
-        $sha256.Dispose()
-    }
-    $checksumBuilder = [System.Text.StringBuilder]::new(64)
-    foreach ($hashByte in $hashBytes) {
-        [void]$checksumBuilder.Append($hashByte.ToString("x2", [System.Globalization.CultureInfo]::InvariantCulture))
-    }
-    $actualChecksum = $checksumBuilder.ToString()
+    $actualChecksum = Get-SealFileSHA256 $archivePath
     if ($actualChecksum -cne $expectedChecksum) {
         throw (Get-SealInstallerException "SHA-256 mismatch for $asset.")
     }
@@ -146,6 +168,7 @@ public static class SealNativeSystemInfo
     if ($candidateItem.PSIsContainer -or (($candidateItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
         throw (Get-SealInstallerException "$asset does not contain a regular seal.exe binary.")
     }
+    $candidateSHA256 = Get-SealFileSHA256 $candidate
 
     $versionErrorPath = Join-Path $temporaryDirectory "version.err"
     function Test-RequestedVersion {
@@ -171,6 +194,7 @@ public static class SealNativeSystemInfo
         if ($targetItem.PSIsContainer -or (($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
             throw (Get-SealInstallerException "$target is not a regular file.")
         }
+        $originalTargetSHA256 = Get-SealFileSHA256 $target
     }
 
     $destinationStage = Join-Path $installDirectory (".seal-install-" + [Guid]::NewGuid().ToString("N") + ".tmp")
@@ -183,6 +207,7 @@ public static class SealNativeSystemInfo
     } else {
         [System.IO.File]::Move($destinationStage, $target)
     }
+    $replacementApplied = $true
     $destinationStage = $null
 
     if (-not (Test-RequestedVersion $target)) {
@@ -212,24 +237,98 @@ public static class SealNativeSystemInfo
         try {
             if ($hadExistingTarget) {
                 if ($null -ne $destinationBackup -and [System.IO.File]::Exists($destinationBackup)) {
-                    if ($null -ne $target -and [System.IO.File]::Exists($target)) {
-                        [System.IO.File]::Replace($destinationBackup, $target, $null, $true)
-                    } else {
-                        [System.IO.File]::Move($destinationBackup, $target)
+                    $restoreTimer = [System.Diagnostics.Stopwatch]::StartNew()
+                    while ($true) {
+                        try {
+                            if (-not [System.IO.File]::Exists($destinationBackup)) {
+                                throw (Get-SealInstallerException "the installer backup disappeared before rollback.")
+                            }
+                            $backupAttributes = [System.IO.File]::GetAttributes($destinationBackup)
+                            if (($backupAttributes -band [System.IO.FileAttributes]::Directory) -ne 0 -or ($backupAttributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                                throw (Get-SealInstallerException "the installer backup is not a regular file.")
+                            }
+                            if ((Get-SealFileSHA256 $destinationBackup) -cne $originalTargetSHA256) {
+                                throw (Get-SealInstallerException "the installer backup changed before rollback.")
+                            }
+                            if ([System.IO.Directory]::Exists($target)) {
+                                throw (Get-SealInstallerException "the install target became a directory before rollback.")
+                            }
+                            if ([System.IO.File]::Exists($target)) {
+                                $targetAttributes = [System.IO.File]::GetAttributes($target)
+                                if (($targetAttributes -band [System.IO.FileAttributes]::Directory) -ne 0 -or ($targetAttributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                                    throw (Get-SealInstallerException "the install target is not a regular file during rollback.")
+                                }
+                                if ((Get-SealFileSHA256 $target) -cne $candidateSHA256) {
+                                    throw (Get-SealInstallerException "the install target changed before rollback.")
+                                }
+                                [System.IO.File]::Replace($destinationBackup, $target, $null, $true)
+                            } else {
+                                [System.IO.File]::Move($destinationBackup, $target)
+                            }
+                            break
+                        } catch {
+                            $restoreError = Get-SealFileOperationException $_.Exception
+                            $restoreCode = if ($null -eq $restoreError) { -1 } else { $restoreError.HResult -band 0xffff }
+                            $retryableRestore = $restoreCode -eq 5 -or $restoreCode -eq 32 -or $restoreCode -eq 33 -or $restoreCode -eq 1175 -or $restoreCode -eq 1224
+                            $restoreNamesIntact = [System.IO.File]::Exists($destinationBackup) -and [System.IO.File]::Exists($target)
+                            if (-not $retryableRestore -or -not $restoreNamesIntact -or $restoreTimer.Elapsed -ge [System.TimeSpan]::FromSeconds(5)) {
+                                throw
+                            }
+                            [System.Threading.Thread]::Sleep(50)
+                        }
                     }
+                    $restoreTimer.Stop()
                     $destinationBackup = $null
                 }
-            } elseif ($null -ne $target -and [System.IO.File]::Exists($target)) {
-                [System.IO.File]::Delete($target)
+            } else {
+                $cleanReplacementApplied = $replacementApplied
+                if (-not $cleanReplacementApplied -and $null -ne $destinationStage -and -not [System.IO.File]::Exists($destinationStage) -and $null -ne $target -and [System.IO.File]::Exists($target)) {
+                    $targetAttributes = [System.IO.File]::GetAttributes($target)
+                    $targetIsRegular = ($targetAttributes -band [System.IO.FileAttributes]::Directory) -eq 0 -and ($targetAttributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0
+                    $cleanReplacementApplied = $targetIsRegular -and (Get-SealFileSHA256 $target) -ceq $candidateSHA256
+                }
+                if ($cleanReplacementApplied -and $null -ne $target -and [System.IO.File]::Exists($target)) {
+                    $deleteTimer = [System.Diagnostics.Stopwatch]::StartNew()
+                    while ($true) {
+                        try {
+                            $targetAttributes = [System.IO.File]::GetAttributes($target)
+                            if (($targetAttributes -band [System.IO.FileAttributes]::Directory) -ne 0 -or ($targetAttributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                                throw (Get-SealInstallerException "the install target is not a regular file during rollback.")
+                            }
+                            if ((Get-SealFileSHA256 $target) -cne $candidateSHA256) {
+                                throw (Get-SealInstallerException "the install target changed before rollback.")
+                            }
+                            [System.IO.File]::Delete($target)
+                            break
+                        } catch {
+                            $deleteError = Get-SealFileOperationException $_.Exception
+                            $deleteCode = if ($null -eq $deleteError) { -1 } else { $deleteError.HResult -band 0xffff }
+                            $retryableDelete = $deleteCode -eq 5 -or $deleteCode -eq 32 -or $deleteCode -eq 33 -or $deleteCode -eq 1224
+                            if (-not $retryableDelete -or -not [System.IO.File]::Exists($target) -or $deleteTimer.Elapsed -ge [System.TimeSpan]::FromSeconds(5)) {
+                                throw
+                            }
+                            [System.Threading.Thread]::Sleep(50)
+                        }
+                    }
+                    $deleteTimer.Stop()
+                }
             }
         } catch {
             $installerExitCode = 1
+            $rollbackError = Get-SealFileOperationException $_.Exception
+            if ($null -eq $rollbackError) {
+                $rollbackError = $_.Exception
+                while ($null -ne $rollbackError.InnerException) {
+                    $rollbackError = $rollbackError.InnerException
+                }
+            }
+            $rollbackHResult = "0x{0:x8}" -f $rollbackError.HResult
             if ($null -ne $destinationBackup -and [System.IO.File]::Exists($destinationBackup)) {
                 $preservedBackup = $destinationBackup
                 $destinationBackup = $null
-                [Console]::Error.WriteLine("seal installer: rollback failed; the prior binary remains at $preservedBackup")
+                [Console]::Error.WriteLine("seal installer: rollback failed; the prior binary remains at $preservedBackup; $($rollbackError.GetType().FullName) $rollbackHResult`: $($rollbackError.Message)")
             } else {
-                [Console]::Error.WriteLine("seal installer: rollback failed: " + $_.Exception.Message)
+                [Console]::Error.WriteLine("seal installer: rollback failed; $($rollbackError.GetType().FullName) $rollbackHResult`: $($rollbackError.Message)")
             }
         }
     }
