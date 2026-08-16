@@ -174,6 +174,7 @@ func TestVerifyRecordsScopeViolationAsValidFailedRun(t *testing.T) {
 
 func TestVerifyCleansPrivateStagingAfterInjectedPrePublicationFailures(t *testing.T) {
 	points := []string{
+		"staging-created",
 		"write:task.json",
 		"sync-file:task.json",
 		"write:verification.json",
@@ -234,6 +235,55 @@ func TestVerifyRejectsSymlinkedEvidenceWriterPathWithoutEscape(t *testing.T) {
 	entries, readErr := os.ReadDir(outside)
 	if readErr != nil || len(entries) != 1 || entries[0].Name() != "sentinel" {
 		t.Fatalf("outside directory changed: entries %v, error %v", entries, readErr)
+	}
+}
+
+func TestVerifyRejectsStagingReplacementBeforeReopenWithoutDeletingIt(t *testing.T) {
+	repository, taskID := verificationRepository(t, []map[string]any{
+		verificationCheck("pass", "pass", true),
+	})
+	runID := strings.Repeat("d", 32)
+	parent := filepath.Join(repository, ".seal", "evidence", taskID)
+	staging := filepath.Join(parent, ".tmp-"+runID)
+	final := filepath.Join(parent, runID)
+	replacement := filepath.Join(repository, "attacker-replacement")
+	quarantine := filepath.Join(repository, "created-staging-quarantine")
+	if err := os.Mkdir(replacement, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(replacement, "sentinel"), []byte("unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := verifyWithHooks(repository, taskID, verifyHooks{
+		runIDGenerator: func() (string, error) { return runID, nil },
+		writerFault: func(point string) error {
+			if point != "staging-created" {
+				return nil
+			}
+			if err := os.Rename(staging, quarantine); err != nil {
+				return err
+			}
+			return os.Rename(replacement, staging)
+		},
+	})
+	if err == nil || KindOf(err) != KindRepository || !strings.Contains(err.Error(), "identities do not match") {
+		t.Fatalf("verifyWithHooks() error = %v, kind = %v; want staging identity failure", err, KindOf(err))
+	}
+	if _, statErr := os.Lstat(final); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("published Run exists after staging replacement: %v", statErr)
+	}
+	contents, readErr := os.ReadFile(filepath.Join(staging, "sentinel"))
+	if readErr != nil || string(contents) != "unchanged\n" {
+		t.Fatalf("replacement sentinel changed: contents %q, error %v", contents, readErr)
+	}
+	replacementEntries, readErr := os.ReadDir(staging)
+	if readErr != nil || len(replacementEntries) != 1 || replacementEntries[0].Name() != "sentinel" {
+		t.Fatalf("replacement directory changed: entries %v, error %v", replacementEntries, readErr)
+	}
+	createdEntries, readErr := os.ReadDir(quarantine)
+	if readErr != nil || len(createdEntries) != 0 {
+		t.Fatalf("created staging directory received artifacts: entries %v, error %v", createdEntries, readErr)
 	}
 }
 
