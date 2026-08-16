@@ -307,6 +307,7 @@ func parseRunShow(args []string) (string, string, error) {
 
 func parseComplete(args []string) (string, string, error) {
 	var taskID string
+	taskIDSeen := false
 	var runID string
 	runIDSeen := false
 	optionParsing := true
@@ -327,13 +328,14 @@ func parseComplete(args []string) (string, string, error) {
 			runIDSeen = true
 		case optionParsing && strings.HasPrefix(argument, "-"):
 			return "", "", fmt.Errorf("complete received an unsupported option %q", argument)
-		case taskID == "":
+		case !taskIDSeen:
 			taskID = argument
+			taskIDSeen = true
 		default:
 			return "", "", fmt.Errorf("complete requires exactly one <TASK_ID>")
 		}
 	}
-	if taskID == "" {
+	if !taskIDSeen {
 		return "", "", fmt.Errorf("complete requires exactly one <TASK_ID>")
 	}
 	if !runIDSeen {
@@ -438,7 +440,7 @@ func completeHelpRequested(args []string) bool {
 		case argument == "--":
 			return false
 		case argument == "--run-id":
-			if index+1 >= len(args) {
+			if index+1 >= len(args) || strings.HasPrefix(args[index+1], "-") && args[index+1] != "-" {
 				return false
 			}
 			index++
