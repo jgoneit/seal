@@ -68,6 +68,11 @@ successful verification operation even when its mechanical result is `fail`.
 Verify does not decide Completion, read Verdict, select a latest identity, or
 invoke another Toolkit module.
 
+The Go v1 exit table treats exhaustion after 100 true generated Run-id
+collisions as publication exit `3` with no new Run or staging residue. This is
+an explicit narrow divergence from the frozen implementation's exit `2`
+classification; it does not alter any persisted Evidence meaning.
+
 For the Evidence writer only, Go prevalidates the saved Task and check
 definitions before S0, writes into a private sibling staging directory, and
 publishes the complete directory with a native no-replace rename. Private means

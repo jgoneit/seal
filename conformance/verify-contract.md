@@ -158,7 +158,10 @@ mechanical-result, and manifest-digest semantics.
 ## Publication and safety boundary
 
 - Run ids are UUID-v4-shaped 32-character lowercase hexadecimal values.
-  Allocation retries at most 100 true collisions.
+  Allocation retries at most 100 true collisions. Exhausting those retries is
+  a publication failure at exit `3` with no new Run or staging residue. The
+  frozen implementation classified this synthetic exhaustion as exit `2`; the
+  Go v1 exit table explicitly approves the narrower publication classification.
 - Staging is a sibling `.tmp-<RUN_ID>` directory. POSIX systems enforce mode
   `0700`. Windows applies a protected DACL that grants inheritable full access
   only to the current process-token user and LocalSystem before any artifact is
