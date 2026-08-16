@@ -88,7 +88,9 @@ failures.
 - Windows creates the process suspended, assigns it to a kill-on-close Job,
   and resumes only after assignment. Job creation, assignment, or resume
   failure is recorded as launch failure; there is no shell or `taskkill`
-  fallback.
+  fallback. Ordinary descendants remain in the Job. As in the frozen runner, a
+  child that deliberately requests `CREATE_BREAKAWAY_FROM_JOB` may escape; that
+  documented nested-Job compatibility limit is not a security boundary.
 
 Check logs are opened through the retained staging-directory handle with
 exclusive creation. A mutable reconstructed staging pathname is not used.
