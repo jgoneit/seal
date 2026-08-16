@@ -236,3 +236,105 @@ jobs:
             dist/seal_* \
             dist/checksums.txt \
             "${release_flags[@]}"
+
+  smoke-install-unix:
+    name: Install published ${{ matrix.goos }} ${{ matrix.goarch }}
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install published release
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_home="${RUNNER_TEMP}/seal-install-home"
+          output="${RUNNER_TEMP}/seal-install.out"
+          error_output="${RUNNER_TEMP}/seal-install.err"
+          mkdir -p "${install_home}"
+          if ! HOME="${install_home}" sh ./install.sh --version "${GITHUB_REF_NAME}" >"${output}" 2>"${error_output}"; then
+            cat "${output}" >&2
+            cat "${error_output}" >&2
+            exit 1
+          fi
+          if [[ -s "${error_output}" ]]; then
+            printf '%s\n' "installer wrote unexpected stderr" >&2
+            cat "${error_output}" >&2
+            exit 1
+          fi
+          target="${install_home}/.local/bin/seal"
+          expected_version="${GITHUB_REF_NAME#v}"
+          actual_version="$("${target}" --version)"
+          if [[ "${actual_version}" != "${expected_version}" ]]; then
+            printf 'installed version mismatch: got %s, want %s\n' "${actual_version}" "${expected_version}" >&2
+            exit 1
+          fi
+          if ! grep -Fq "${target}" "${output}"; then
+            printf '%s\n' "installer output omitted the absolute target" >&2
+            exit 1
+          fi
+          shopt -s nullglob
+          residue=("${install_home}/.local/bin"/.seal-*)
+          if (( ${#residue[@]} != 0 )); then
+            printf '%s\n' "installer left staging or backup residue" >&2
+            exit 1
+          fi
+
+  smoke-install-windows:
+    name: Install published windows amd64
+    needs: publish
+    runs-on: windows-2025
+    steps:
+      - name: Check out annotated tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install published release
+        shell: pwsh
+        run: |
+          $localAppData = Join-Path $env:RUNNER_TEMP "seal-install-localappdata"
+          $outputPath = Join-Path $env:RUNNER_TEMP "seal-install.out"
+          $errorPath = Join-Path $env:RUNNER_TEMP "seal-install.err"
+          New-Item -ItemType Directory -Force -Path $localAppData | Out-Null
+          $env:LOCALAPPDATA = $localAppData
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -Version $env:GITHUB_REF_NAME 1> $outputPath 2> $errorPath
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content -LiteralPath $outputPath -ErrorAction SilentlyContinue | Write-Error
+            Get-Content -LiteralPath $errorPath -ErrorAction SilentlyContinue | Write-Error
+            throw "published installer failed"
+          }
+          if ((Get-Item -LiteralPath $errorPath).Length -ne 0) {
+            Get-Content -LiteralPath $errorPath | Write-Error
+            throw "installer wrote unexpected stderr"
+          }
+          $target = Join-Path $localAppData "Programs\Seal\bin\seal.exe"
+          $versionError = Join-Path $env:RUNNER_TEMP "installed-version.err"
+          $actualVersion = @(& $target --version 2> $versionError)
+          $expectedVersion = $env:GITHUB_REF_NAME.Substring(1)
+          if ($LASTEXITCODE -ne 0 -or (Get-Item -LiteralPath $versionError).Length -ne 0 -or $actualVersion.Count -ne 1 -or ([string]$actualVersion[0]) -cne $expectedVersion) {
+            throw "installed version does not exactly match $expectedVersion"
+          }
+          if (-not (Select-String -LiteralPath $outputPath -SimpleMatch $target -Quiet)) {
+            throw "installer output omitted the absolute target"
+          }
+          $installDirectory = Split-Path -Parent $target
+          $residue = @(Get-ChildItem -LiteralPath $installDirectory -Force | Where-Object { $_.Name -like '.seal-*' })
+          if ($residue.Count -ne 0) {
+            throw "installer left staging or backup residue: $($residue.FullName -join ', ')"
+          }
