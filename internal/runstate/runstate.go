@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,9 +75,16 @@ func KindOf(err error) ErrorKind {
 // ValidatedRun is an immutable-by-convention result of the package's sole
 // stored-Run integrity authority. Its fields are intentionally unexported.
 type ValidatedRun struct {
+	repository               string
+	runDirectory             string
+	runDirectoryInfo         fs.FileInfo
 	taskID                   string
 	runID                    string
+	baseline                 string
+	verifierRequired         bool
 	evidenceSHA256           string
+	sourceBeforeSHA256       string
+	sourceAfterSHA256        string
 	mechanicalResult         string
 	scopePass                bool
 	scopeViolations          []ScopeViolation
@@ -263,11 +271,22 @@ func validateRunAt(
 	if err != nil {
 		return nil, err
 	}
+	runDirectoryInfo, err := os.Stat(runDirectory)
+	if err != nil || !runDirectoryInfo.IsDir() {
+		return nil, &EvidenceError{message: "Validated Evidence Run directory became unavailable."}
+	}
 
 	return &ValidatedRun{
+		repository:               repository,
+		runDirectory:             runDirectory,
+		runDirectoryInfo:         runDirectoryInfo,
 		taskID:                   taskID,
 		runID:                    runID,
+		baseline:                 documents.baseline,
+		verifierRequired:         documents.verifierRequired,
 		evidenceSHA256:           evidenceSHA256,
+		sourceBeforeSHA256:       documents.sourceBeforeSHA256,
+		sourceAfterSHA256:        documents.sourceAfterSHA256,
 		mechanicalResult:         documents.mechanicalResult,
 		scopePass:                documents.scopePass,
 		scopeViolations:          documents.scopeViolations,

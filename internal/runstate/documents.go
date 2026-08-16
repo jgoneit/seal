@@ -21,6 +21,10 @@ type validatedDocuments struct {
 	expectedFiles            []string
 	checkSummaries           []Check
 	scopeViolations          []ScopeViolation
+	baseline                 string
+	verifierRequired         bool
+	sourceBeforeSHA256       string
+	sourceAfterSHA256        string
 	scopePass                bool
 	requiredChecksPass       bool
 	sourceStableDuringChecks bool
@@ -28,9 +32,10 @@ type validatedDocuments struct {
 }
 
 type taskFacts struct {
-	baseline string
-	scope    []string
-	checks   []taskCheck
+	baseline         string
+	scope            []string
+	checks           []taskCheck
+	verifierRequired bool
 }
 
 type taskCheck struct {
@@ -127,10 +132,16 @@ func parseTaskFacts(task jsonObject, taskID, context string) (taskFacts, error) 
 	if !ok {
 		return taskFacts{}, &IdentityError{message: context + " verifier must contain a required boolean."}
 	}
-	if _, ok := verifier["required"].(bool); !ok {
+	verifierRequired, ok := verifier["required"].(bool)
+	if !ok {
 		return taskFacts{}, &IdentityError{message: context + " verifier must contain a required boolean."}
 	}
-	return taskFacts{baseline: baseline, scope: scope, checks: checks}, nil
+	return taskFacts{
+		baseline:         baseline,
+		scope:            scope,
+		checks:           checks,
+		verifierRequired: verifierRequired,
+	}, nil
 }
 
 func validateDocuments(runDirectory string, task jsonObject, taskID, runID string) (validatedDocuments, error) {
@@ -216,6 +227,10 @@ func validateDocuments(runDirectory string, task jsonObject, taskID, runID strin
 		expectedFiles:            expectedFiles,
 		checkSummaries:           checkSummaries,
 		scopeViolations:          changed.projected,
+		baseline:                 taskDefinition.baseline,
+		verifierRequired:         taskDefinition.verifierRequired,
+		sourceBeforeSHA256:       verification.document["source_before_checks_sha256"].(string),
+		sourceAfterSHA256:        verification.document["source_after_checks_sha256"].(string),
 		scopePass:                changed.scopePass,
 		requiredChecksPass:       requiredChecksPass,
 		sourceStableDuringChecks: sourceStable,

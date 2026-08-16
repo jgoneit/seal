@@ -30,12 +30,13 @@ Migration work proceeds as small vertical slices:
 5. Keep the Python implementation canonical until the transition criteria are
    separately reviewed and approved.
 
+Except for an explicitly approved canonical semantic transition named below,
 Python remains authoritative for Acceptance semantics. An explicitly approved
 non-semantic resource-limit or invocation-environment divergence may be
 retained only when its narrow scope is recorded in the conformance contract and
-protected by a regression test. Such an exception must not change Task or Run
-identity, mechanical state, Scope, required checks, source stability, Evidence
-or manifest integrity, or Completion meaning.
+protected by a regression test. Such a non-semantic exception must not change
+Task or Run identity, mechanical state, Scope, required checks, source
+stability, Evidence or manifest integrity, or Completion meaning.
 
 The Task snapshot destination decision below is the narrow persisted-root
 decision for the first Go writer. It does not revise or generalize the frozen
@@ -101,6 +102,53 @@ unrelated process with the same operating-system account can still race
 mutable directory names between identity checks on POSIX; that hostile
 same-user race is outside the v1 atomic object-binding guarantee. Windows uses
 handle-relative publication and has no pathname fallback.
+
+## Approved Go v1 Completion transition
+
+Go v1 Completion is an explicitly approved canonical policy transition, not an
+exact reproduction of the frozen Python Completion policy. The frozen
+implementation remains authoritative for Task, Evidence, manifest, S0/S1,
+Scope, and check meanings consumed through `ValidateRun()`. It is no longer
+authoritative for whether a recorded Verdict can satisfy Completion or for the
+shape and mutability of a newly written Completion record.
+
+The only supported Go v1 Completion profile is Basic Acceptance with
+`verifier.required=false`. A Task with `verifier.required=true` remains valid
+for storage, verification, and read-only queries, but `complete` always rejects
+it with exit `7`. Go v1 does not read, validate, or decide from
+`verdict.raw.json` or `verdict.json`; their presence, absence, validity, and
+contents do not affect Completion.
+
+Go v1 writes only immutable schema-version-2 Completion records. It never
+upgrades or overwrites the frozen schema-version-1 record. A valid existing v2
+record is reusable only after the current invocation revalidates the Run,
+collects current source, and reapplies every eligibility gate. Reuse preserves
+the record's exact bytes and original timestamp. Static reuse validation
+requires both stored source digests to equal the `ValidateRun()`-authoritative
+S1 digest before S2 is collected. A legacy v1 record, a corrupt or
+contradictory v2 record, or a symlink, directory, or other non-regular
+Completion destination is Evidence failure exit `8` and remains untouched.
+Absent records are published atomically without replacement; concurrent
+eligible creators reconcile an existing winner only by validating and reusing
+its exact bytes and timestamp.
+
+The fixed source and policy order is: CLI and identity; canonical stored-Run
+validation; existing v2 record validation; stable current-source S2
+collection; `S0 == S1 == S2`; the unsupported required-verifier gate; Scope;
+required timeout; other required-check failure; and only then immutable record
+publication or reuse. This order preserves exits `3`, `9`, `7`, `4`, `6`, and
+`5` respectively after stored Evidence and existing-record failures have taken
+their earlier classifications. Optional check failure or timeout does not block
+Basic Acceptance. A runtime, result-rendering, or stdout failure is exit `1`;
+if it occurs after a record was committed or selected for reuse, the immutable
+record is preserved and is not rolled back.
+
+This transition does not add Bundle, Verdict, Reviewer, retry, repair, latest
+identity, or automatic execution behavior. The complete external contract,
+record schema, idempotency rule, and failure precedence are frozen in
+[`conformance/complete-contract.md`](conformance/complete-contract.md). The
+policy was approved before implementation and is now represented by the public
+command and its conformance tests.
 
 ## Explicit exclusions
 

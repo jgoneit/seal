@@ -21,6 +21,7 @@ Usage:
   seal task show <TASK_ID>
   seal verify <TASK_ID>
   seal run show <TASK_ID> --run-id <RUN_ID>
+  seal complete <TASK_ID> --run-id <RUN_ID>
 
 Options:
   --file <TASK_JSON>  Read a Task Spec from this file.
@@ -31,7 +32,8 @@ Options:
 Task creation validates and stores one normalized Task snapshot.
 Verification records one exact-identity, manifest-valid Evidence Run.
 The Task and Run queries are exact-identity, read-only compatibility commands.
-Completion and latest-id selection are unsupported.
+Completion evaluates one exact manifest-valid Run against current source.
+Latest-id selection is unsupported.
 `
 
 const taskCreateHelp = `usage: seal task create [-h] --file FILE [--force]
@@ -51,7 +53,19 @@ options:
   -h, --help  show this help message and exit
 `
 
+const completeHelp = `usage: seal complete [-h] --run-id RUN_ID TASK_ID
+
+positional arguments:
+  TASK_ID
+
+options:
+  -h, --help       show this help message and exit
+  --run-id RUN_ID  explicit verification run id to validate; latest-run
+                   selection is unsupported
+`
+
 func main() {
+	configureProcessSignals()
 	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr))
 }
 
@@ -73,7 +87,7 @@ func isInformationalCommand(args []string) bool {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "--version") {
 		return true
 	}
-	return taskCreateHelpRequested(args) || verifyHelpRequested(args)
+	return taskCreateHelpRequested(args) || verifyHelpRequested(args) || completeHelpRequested(args)
 }
 
 func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
@@ -93,6 +107,10 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 	}
 	if verifyHelpRequested(args) {
 		fmt.Fprint(stdout, verifyHelp)
+		return 0
+	}
+	if completeHelpRequested(args) {
+		fmt.Fprint(stdout, completeHelp)
 		return 0
 	}
 
@@ -120,8 +138,36 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 		}
 		return showRun(cwd, taskID, runID, stdout, stderr)
 	}
+	if len(args) >= 1 && args[0] == "complete" {
+		taskID, runID, err := parseComplete(args[1:])
+		if err != nil {
+			return commandUsage(stderr, err.Error())
+		}
+		return completeTask(cwd, taskID, runID, stdout, stderr)
+	}
 
-	return commandUsage(stderr, "expected --help, --version, task create, task show, verify, or run show")
+	return commandUsage(stderr, "expected --help, --version, task create, task show, verify, run show, or complete")
+}
+
+func completeTask(cwd, taskID, runID string, stdout, stderr io.Writer) int {
+	completed, err := runstate.Complete(cwd, taskID, runID)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		if code, ok := runstate.CompletionExitCode(err); ok {
+			return code
+		}
+		return 1
+	}
+	encoded, err := completed.ReferenceJSON()
+	if err != nil {
+		fmt.Fprintf(stderr, "error: could not render Completion output: %v\n", err)
+		return 1
+	}
+	if _, err := stdout.Write(encoded); err != nil {
+		fmt.Fprintf(stderr, "error: could not write Completion output: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func verifyTask(cwd, taskID string, stdout, stderr io.Writer) int {
@@ -260,6 +306,45 @@ func parseRunShow(args []string) (string, string, error) {
 	return taskID, runID, nil
 }
 
+func parseComplete(args []string) (string, string, error) {
+	var taskID string
+	taskIDSeen := false
+	var runID string
+	runIDSeen := false
+	optionParsing := true
+	for index := 0; index < len(args); index++ {
+		argument := args[index]
+		switch {
+		case optionParsing && argument == "--":
+			optionParsing = false
+		case optionParsing && argument == "--run-id":
+			if index+1 >= len(args) || strings.HasPrefix(args[index+1], "-") && args[index+1] != "-" {
+				return "", "", fmt.Errorf("complete requires --run-id <RUN_ID>")
+			}
+			index++
+			runID = args[index]
+			runIDSeen = true
+		case optionParsing && strings.HasPrefix(argument, "--run-id="):
+			runID = strings.TrimPrefix(argument, "--run-id=")
+			runIDSeen = true
+		case optionParsing && strings.HasPrefix(argument, "-"):
+			return "", "", fmt.Errorf("complete received an unsupported option %q", argument)
+		case !taskIDSeen:
+			taskID = argument
+			taskIDSeen = true
+		default:
+			return "", "", fmt.Errorf("complete requires exactly one <TASK_ID>")
+		}
+	}
+	if !taskIDSeen {
+		return "", "", fmt.Errorf("complete requires exactly one <TASK_ID>")
+	}
+	if !runIDSeen {
+		return "", "", fmt.Errorf("complete requires --run-id <RUN_ID>")
+	}
+	return taskID, runID, nil
+}
+
 func parseVerify(args []string) (string, error) {
 	positional := make([]string, 0, len(args))
 	optionParsing := true
@@ -346,11 +431,35 @@ func verifyHelpRequested(args []string) bool {
 	return false
 }
 
+func completeHelpRequested(args []string) bool {
+	if len(args) < 2 || args[0] != "complete" {
+		return false
+	}
+	for index := 1; index < len(args); index++ {
+		argument := args[index]
+		switch {
+		case argument == "--":
+			return false
+		case argument == "--run-id":
+			if index+1 >= len(args) || strings.HasPrefix(args[index+1], "-") && args[index+1] != "-" {
+				return false
+			}
+			index++
+		case strings.HasPrefix(argument, "--run-id="):
+			continue
+		case argument == "--help" || argument == "-h":
+			return true
+		}
+	}
+	return false
+}
+
 func commandUsage(stderr io.Writer, detail string) int {
 	fmt.Fprintf(stderr, "error: %s\n", detail)
 	fmt.Fprintln(stderr, "usage: seal task create --file <TASK_JSON> [--force]")
 	fmt.Fprintln(stderr, "       seal task show <TASK_ID>")
 	fmt.Fprintln(stderr, "       seal verify <TASK_ID>")
 	fmt.Fprintln(stderr, "       seal run show <TASK_ID> --run-id <RUN_ID>")
+	fmt.Fprintln(stderr, "       seal complete <TASK_ID> --run-id <RUN_ID>")
 	return 2
 }
