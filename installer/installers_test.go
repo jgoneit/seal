@@ -442,7 +442,7 @@ func TestInstallPowerShellFinalizerPreservesBackupAfterRollbackLockExhaustion(t 
 	if err == nil {
 		t.Fatalf("install.ps1 unexpectedly succeeded after rollback exhaustion:\n%s", output)
 	}
-	if !strings.Contains(string(output), "rollback failed; the prior binary remains at") || !strings.Contains(string(output), "0x") {
+	if !strings.Contains(string(output), "rollback failed; the prior binary remains at") || !strings.Contains(string(output), "HResult 0x") || !strings.Contains(string(output), "Win32 ") {
 		t.Fatalf("install.ps1 omitted rollback recovery details:\n%s", output)
 	}
 	if _, err := os.Stat(lockReady); err != nil {
