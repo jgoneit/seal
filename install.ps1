@@ -21,6 +21,10 @@ $version = $tag.Substring(1)
 $temporaryDirectory = $null
 $destinationStage = $null
 $destinationBackup = $null
+$target = $null
+$hadExistingTarget = $false
+$replacementPending = $false
+$installerExitCode = 0
 
 try {
     if ($env:OS -cne "Windows_NT") {
@@ -161,38 +165,22 @@ public static class SealNativeSystemInfo
     $destinationStage = Join-Path $installDirectory (".seal-install-" + [Guid]::NewGuid().ToString("N") + ".tmp")
     [System.IO.File]::Copy($candidate, $destinationStage, $false)
 
-    $replacementApplied = $false
-    try {
-        if ($hadExistingTarget) {
-            $destinationBackup = Join-Path $installDirectory (".seal-backup-" + [Guid]::NewGuid().ToString("N") + ".tmp")
-            [System.IO.File]::Replace($destinationStage, $target, $destinationBackup, $true)
-        } else {
-            [System.IO.File]::Move($destinationStage, $target)
-        }
-        $replacementApplied = $true
-        $destinationStage = $null
-
-        if (-not (Test-RequestedVersion $target)) {
-            Stop-SealInstaller "the installed binary failed its absolute-path version smoke test."
-        }
-    } catch {
-        $installationFailure = $_.Exception
-        if ($replacementApplied) {
-            if ($hadExistingTarget) {
-                try {
-                    [System.IO.File]::Replace($destinationBackup, $target, $null, $true)
-                    $destinationBackup = $null
-                } catch {
-                    $preservedBackup = $destinationBackup
-                    $destinationBackup = $null
-                    throw [System.InvalidOperationException]::new("installation failed and rollback also failed; the prior binary remains at $preservedBackup", $_.Exception)
-                }
-            } else {
-                [System.IO.File]::Delete($target)
-            }
-        }
-        throw $installationFailure
+    $replacementPending = $true
+    if ($hadExistingTarget) {
+        $destinationBackup = Join-Path $installDirectory (".seal-backup-" + [Guid]::NewGuid().ToString("N") + ".tmp")
+        [System.IO.File]::Replace($destinationStage, $target, $destinationBackup, $true)
+    } else {
+        [System.IO.File]::Move($destinationStage, $target)
     }
+    $destinationStage = $null
+
+    if (-not (Test-RequestedVersion $target)) {
+        Stop-SealInstaller "the installed binary failed its absolute-path version smoke test."
+    }
+
+    # This is the commit point. Until the installed absolute path has passed,
+    # the outer finally block owns rollback, including PowerShell interruption.
+    $replacementPending = $false
 
     if ($null -ne $destinationBackup) {
         [System.IO.File]::Delete($destinationBackup)
@@ -207,15 +195,59 @@ public static class SealNativeSystemInfo
     Write-Output "Git is required when Seal evaluates a repository; this installer does not install Git."
 } catch {
     [Console]::Error.WriteLine("seal installer: " + $_.Exception.Message)
-    exit 1
+    $installerExitCode = 1
 } finally {
+    if ($replacementPending) {
+        try {
+            if ($hadExistingTarget) {
+                if ($null -ne $destinationBackup -and [System.IO.File]::Exists($destinationBackup)) {
+                    if ($null -ne $target -and [System.IO.File]::Exists($target)) {
+                        [System.IO.File]::Replace($destinationBackup, $target, $null, $true)
+                    } else {
+                        [System.IO.File]::Move($destinationBackup, $target)
+                    }
+                    $destinationBackup = $null
+                }
+            } elseif ($null -ne $target -and [System.IO.File]::Exists($target)) {
+                [System.IO.File]::Delete($target)
+            }
+        } catch {
+            $installerExitCode = 1
+            if ($null -ne $destinationBackup -and [System.IO.File]::Exists($destinationBackup)) {
+                $preservedBackup = $destinationBackup
+                $destinationBackup = $null
+                [Console]::Error.WriteLine("seal installer: rollback failed; the prior binary remains at $preservedBackup")
+            } else {
+                [Console]::Error.WriteLine("seal installer: rollback failed: " + $_.Exception.Message)
+            }
+        }
+    }
     if ($null -ne $destinationStage -and [System.IO.File]::Exists($destinationStage)) {
-        [System.IO.File]::Delete($destinationStage)
+        try {
+            [System.IO.File]::Delete($destinationStage)
+        } catch {
+            $installerExitCode = 1
+            [Console]::Error.WriteLine("seal installer: could not remove staging file $destinationStage")
+        }
     }
     if ($null -ne $destinationBackup -and [System.IO.File]::Exists($destinationBackup)) {
-        [System.IO.File]::Delete($destinationBackup)
+        try {
+            [System.IO.File]::Delete($destinationBackup)
+        } catch {
+            $installerExitCode = 1
+            [Console]::Error.WriteLine("seal installer: could not remove backup file $destinationBackup")
+        }
     }
     if ($null -ne $temporaryDirectory -and [System.IO.Directory]::Exists($temporaryDirectory)) {
-        [System.IO.Directory]::Delete($temporaryDirectory, $true)
+        try {
+            [System.IO.Directory]::Delete($temporaryDirectory, $true)
+        } catch {
+            $installerExitCode = 1
+            [Console]::Error.WriteLine("seal installer: could not remove temporary directory $temporaryDirectory")
+        }
     }
+}
+
+if ($installerExitCode -ne 0) {
+    exit $installerExitCode
 }
