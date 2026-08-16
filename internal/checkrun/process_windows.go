@@ -3,6 +3,7 @@
 package checkrun
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -187,20 +188,21 @@ func (process *windowsProcess) terminate(
 	outcomeChannel <-chan processOutcome,
 	grace time.Duration,
 ) (processOutcome, error) {
-	if err := process.closeJobHandle(); err != nil {
-		return processOutcome{}, err
-	}
+	cleanupError := process.closeJobHandle()
 	timer := time.NewTimer(grace)
 	select {
 	case outcome := <-outcomeChannel:
 		stopTimer(timer)
-		return outcome, nil
+		return outcome, cleanupError
 	case <-timer.C:
 	}
 	if err := windows.TerminateProcess(process.process, 1); err != nil {
-		return processOutcome{}, err
+		cleanupError = errors.Join(cleanupError, err)
 	}
-	return <-outcomeChannel, nil
+	// The root process is retained until its wait outcome is consumed. This
+	// keeps the timeout path from abandoning a goroutine in WaitForSingleObject
+	// even when Job closure or the direct termination fallback reports an error.
+	return <-outcomeChannel, cleanupError
 }
 
 func (process *windowsProcess) cleanupAfterExit() error {

@@ -54,8 +54,9 @@ func (process *posixProcess) terminate(
 	outcomeChannel <-chan processOutcome,
 	grace time.Duration,
 ) (processOutcome, error) {
+	var cleanupError error
 	if err := signalProcessGroup(process.command.Process.Pid, syscall.SIGTERM); err != nil {
-		return processOutcome{}, err
+		cleanupError = errors.Join(cleanupError, err)
 	}
 
 	var completed *processOutcome
@@ -68,19 +69,24 @@ func (process *posixProcess) terminate(
 	}
 
 	if err := signalProcessGroup(process.command.Process.Pid, syscall.SIGKILL); err != nil {
-		return processOutcome{}, err
+		cleanupError = errors.Join(cleanupError, err)
 	}
 	if completed != nil {
-		return *completed, nil
+		return *completed, cleanupError
 	}
-	return <-outcomeChannel, nil
+	// A direct root kill is a final fallback if group signaling encountered an
+	// abnormal platform error. The wait outcome is always consumed before this
+	// method returns, so its goroutine cannot be stranded on a timed-out check.
+	if err := process.command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		cleanupError = errors.Join(cleanupError, err)
+	}
+	return <-outcomeChannel, cleanupError
 }
 
 func (process *posixProcess) cleanupAfterExit() error {
-	if err := signalProcessGroup(process.command.Process.Pid, syscall.SIGTERM); err != nil {
-		return err
-	}
-	return signalProcessGroup(process.command.Process.Pid, syscall.SIGKILL)
+	termError := signalProcessGroup(process.command.Process.Pid, syscall.SIGTERM)
+	killError := signalProcessGroup(process.command.Process.Pid, syscall.SIGKILL)
+	return errors.Join(termError, killError)
 }
 
 func (process *posixProcess) close() error { return nil }
