@@ -10,7 +10,7 @@ import (
 	"github.com/jgoneit/seal/internal/taskstate"
 )
 
-const version = "0.0.0-dev"
+const version = "0.3.0-rc.1"
 
 const help = `Seal exposes deterministic Acceptance state.
 
