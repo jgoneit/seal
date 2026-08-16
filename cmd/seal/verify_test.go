@@ -3,11 +3,19 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jgoneit/seal/internal/runstate"
 )
 
 func TestRunCLIVerifyPublishesRunReadableByRunShow(t *testing.T) {
@@ -83,6 +91,137 @@ func TestRunCLIVerifyMapsInputAndRepositoryFailures(t *testing.T) {
 				t.Fatalf("stdout = %q, stderr = %q", stdout.String(), stderr.String())
 			}
 		})
+	}
+}
+
+func TestVerifyRejectsUnsafeEvidenceWriterAncestorMatrix(t *testing.T) {
+	type boundary struct {
+		name     string
+		relative func(string) string
+		gate     bool
+	}
+	type unsafeKind struct {
+		name    string
+		symlink bool
+	}
+	boundaries := []boundary{
+		{name: "seal", relative: func(string) string { return ".seal" }, gate: true},
+		{name: "evidence", relative: func(string) string { return filepath.Join(".seal", "evidence") }},
+		{name: "task", relative: func(taskID string) string {
+			return filepath.Join(".seal", "evidence", taskID)
+		}},
+	}
+	kinds := []unsafeKind{
+		{name: "symlink", symlink: true},
+		{name: "broken_symlink", symlink: true},
+		{name: "non_directory"},
+	}
+	surfaces := []struct {
+		name   string
+		invoke func(string) verifyAncestorInvocation
+		assert func(*testing.T, verifyAncestorInvocation)
+	}{
+		{
+			name: "api",
+			invoke: func(repository string) verifyAncestorInvocation {
+				_, err := runstate.Verify(repository, createContractTaskID)
+				return verifyAncestorInvocation{err: err}
+			},
+			assert: func(t *testing.T, result verifyAncestorInvocation) {
+				t.Helper()
+				var repositoryError *runstate.RepositoryError
+				if !errors.As(result.err, &repositoryError) {
+					t.Fatalf("Verify error = %T %v, want RepositoryError", result.err, result.err)
+				}
+				if got := runstate.KindOf(result.err); got != runstate.KindRepository {
+					t.Fatalf("Verify error kind = %v, want %v", got, runstate.KindRepository)
+				}
+			},
+		},
+		{
+			name: "cli",
+			invoke: func(repository string) verifyAncestorInvocation {
+				var stdout bytes.Buffer
+				var stderr bytes.Buffer
+				code := runCLI(
+					repository,
+					[]string{"verify", createContractTaskID},
+					&stdout,
+					&stderr,
+				)
+				return verifyAncestorInvocation{
+					code:   code,
+					stdout: stdout.String(),
+					stderr: stderr.String(),
+				}
+			},
+			assert: func(t *testing.T, result verifyAncestorInvocation) {
+				t.Helper()
+				if result.code != 3 || result.stdout != "" || result.stderr == "" {
+					t.Fatalf(
+						"verify CLI = code %d, stdout %q, stderr %q; want RepositoryError exit 3",
+						result.code,
+						result.stdout,
+						result.stderr,
+					)
+				}
+			},
+		},
+	}
+
+	for _, boundary := range boundaries {
+		for _, kind := range kinds {
+			leafName := boundary.name + "/" + kind.name
+			t.Run(leafName, func(t *testing.T) {
+				if kind.symlink {
+					verifyAncestorRequireSymlink(t)
+				}
+				for _, surface := range surfaces {
+					t.Run(surface.name, func(t *testing.T) {
+						fixture := createContractNewFixture(t, true)
+						created := createContractRun(
+							t,
+							fixture.repository,
+							"task", "create", "--file", fixture.input,
+						)
+						if created.code != 0 {
+							t.Fatalf("task create failed: %s", created.stderr)
+						}
+						repository, err := filepath.EvalSymlinks(fixture.repository)
+						if err != nil {
+							t.Fatal(err)
+						}
+						outside := filepath.Join(t.TempDir(), "outside")
+						if err := os.MkdirAll(outside, 0o700); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(
+							filepath.Join(outside, "sentinel"),
+							[]byte("outside sentinel\n"),
+							0o600,
+						); err != nil {
+							t.Fatal(err)
+						}
+						ancestor := filepath.Join(
+							repository,
+							boundary.relative(createContractTaskID),
+						)
+
+						result, backup := verifyAncestorInvoke(
+							t,
+							repository,
+							ancestor,
+							outside,
+							kind.name,
+							boundary.gate,
+							func() verifyAncestorInvocation { return surface.invoke(repository) },
+						)
+						surface.assert(t, result)
+						verifyAncestorAssertNoRunResidue(t, repository, outside, backup)
+					})
+				}
+			})
+		}
 	}
 }
 
@@ -167,3 +306,271 @@ func (failingOutput) Write([]byte) (int, error) {
 }
 
 var _ io.Writer = failingOutput{}
+
+type verifyAncestorInvocation struct {
+	err    error
+	code   int
+	stdout string
+	stderr string
+}
+
+type verifyAncestorSnapshotEntry struct {
+	mode   fs.FileMode
+	data   string
+	target string
+}
+
+func verifyAncestorRequireSymlink(t *testing.T) {
+	t.Helper()
+	directory := t.TempDir()
+	link := filepath.Join(directory, "link")
+	if err := os.Symlink(filepath.Join(directory, "missing"), link); err != nil {
+		t.Skipf("symlink fixture unavailable on this platform: %v", err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func verifyAncestorInvoke(
+	t *testing.T,
+	repository string,
+	ancestor string,
+	outside string,
+	kind string,
+	gate bool,
+	invoke func() verifyAncestorInvocation,
+) (verifyAncestorInvocation, string) {
+	t.Helper()
+	if !gate {
+		if err := os.MkdirAll(filepath.Dir(ancestor), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyAncestorMakeUnsafe(ancestor, outside, kind); err != nil {
+			t.Fatal(err)
+		}
+		before, err := verifyAncestorSnapshot(outside)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := invoke()
+		verifyAncestorAssertSnapshot(t, outside, before)
+		return result, ""
+	}
+
+	gateDirectory, ready, release := verifyAncestorInstallGitGate(t)
+	released := false
+	releaseGate := func() {
+		if released {
+			return
+		}
+		released = true
+		_ = os.WriteFile(release, []byte("release\n"), 0o600)
+	}
+	t.Cleanup(releaseGate)
+
+	resultChannel := make(chan verifyAncestorInvocation, 1)
+	go func() {
+		resultChannel <- invoke()
+	}()
+	verifyAncestorWaitForGate(t, ready, resultChannel)
+
+	backup := filepath.Join(gateDirectory, "original-seal")
+	if err := os.Rename(ancestor, backup); err != nil {
+		releaseGate()
+		t.Fatal(err)
+	}
+	if err := verifyAncestorMakeUnsafe(ancestor, outside, kind); err != nil {
+		releaseGate()
+		t.Fatal(err)
+	}
+	before, err := verifyAncestorSnapshot(outside)
+	if err != nil {
+		releaseGate()
+		t.Fatal(err)
+	}
+	releaseGate()
+
+	var result verifyAncestorInvocation
+	select {
+	case result = <-resultChannel:
+	case <-time.After(30 * time.Second):
+		t.Fatal("Verify did not finish after releasing the Git gate")
+	}
+	verifyAncestorAssertSnapshot(t, outside, before)
+	return result, backup
+}
+
+func verifyAncestorMakeUnsafe(ancestor, outside, kind string) error {
+	switch kind {
+	case "symlink":
+		target := filepath.Join(outside, "target")
+		if err := os.Mkdir(target, 0o700); err != nil {
+			return err
+		}
+		return os.Symlink(target, ancestor)
+	case "broken_symlink":
+		return os.Symlink(filepath.Join(outside, "missing"), ancestor)
+	case "non_directory":
+		return os.WriteFile(ancestor, []byte("not a directory\n"), 0o600)
+	default:
+		return fmt.Errorf("unknown unsafe ancestor kind %q", kind)
+	}
+}
+
+func verifyAncestorInstallGitGate(t *testing.T) (directory, ready, release string) {
+	t.Helper()
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory = t.TempDir()
+	ready = filepath.Join(directory, "ready")
+	release = filepath.Join(directory, "release")
+	once := filepath.Join(directory, "once")
+	wrapperName := "git"
+	wrapper := `#!/bin/sh
+if mkdir "$SEAL_VERIFY_GATE_ONCE" 2>/dev/null; then
+  : > "$SEAL_VERIFY_GATE_READY"
+  while [ ! -e "$SEAL_VERIFY_GATE_RELEASE" ]; do
+    sleep 0.01
+  done
+fi
+exec "$SEAL_VERIFY_REAL_GIT" "$@"
+`
+	if runtime.GOOS == "windows" {
+		wrapperName = "git.cmd"
+		wrapper = `@echo off
+2>nul mkdir "%SEAL_VERIFY_GATE_ONCE%"
+if not errorlevel 1 (
+  type nul > "%SEAL_VERIFY_GATE_READY%"
+  :seal_verify_wait
+  if not exist "%SEAL_VERIFY_GATE_RELEASE%" (
+    >nul ping 127.0.0.1 -n 2
+    goto seal_verify_wait
+  )
+)
+"%SEAL_VERIFY_REAL_GIT%" %*
+exit /b %errorlevel%
+`
+	}
+	if err := os.WriteFile(filepath.Join(directory, wrapperName), []byte(wrapper), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SEAL_VERIFY_GATE_ONCE", once)
+	t.Setenv("SEAL_VERIFY_GATE_READY", ready)
+	t.Setenv("SEAL_VERIFY_GATE_RELEASE", release)
+	t.Setenv("SEAL_VERIFY_REAL_GIT", realGit)
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return directory, ready, release
+}
+
+func verifyAncestorWaitForGate(
+	t *testing.T,
+	ready string,
+	result <-chan verifyAncestorInvocation,
+) {
+	t.Helper()
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			return
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		select {
+		case early := <-result:
+			t.Fatalf("Verify returned before the Git gate: %+v", early)
+		case <-deadline.C:
+			t.Fatal("Verify did not reach the Git gate")
+		case <-ticker.C:
+		}
+	}
+}
+
+func verifyAncestorSnapshot(root string) (map[string]verifyAncestorSnapshotEntry, error) {
+	snapshot := make(map[string]verifyAncestorSnapshotEntry)
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		item := verifyAncestorSnapshotEntry{mode: info.Mode()}
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			item.target, err = os.Readlink(path)
+		case info.Mode().IsRegular():
+			var contents []byte
+			contents, err = os.ReadFile(path)
+			item.data = string(contents)
+		}
+		if err != nil {
+			return err
+		}
+		snapshot[relative] = item
+		return nil
+	})
+	return snapshot, err
+}
+
+func verifyAncestorAssertSnapshot(
+	t *testing.T,
+	root string,
+	want map[string]verifyAncestorSnapshotEntry,
+) {
+	t.Helper()
+	got, err := verifyAncestorSnapshot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("outside tree changed: got %#v, want %#v", got, want)
+	}
+}
+
+func verifyAncestorAssertNoRunResidue(t *testing.T, roots ...string) {
+	t.Helper()
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			name := entry.Name()
+			if strings.HasPrefix(name, ".tmp-") || (entry.IsDir() && verifyAncestorIsRunID(name)) {
+				return fmt.Errorf("unexpected Run or staging residue at %s", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func verifyAncestorIsRunID(value string) bool {
+	if len(value) != 32 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
