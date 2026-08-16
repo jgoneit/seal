@@ -53,6 +53,14 @@ type Request struct {
 	Scope    []string
 }
 
+// SnapshotRequest identifies only the immutable Task source boundary. It has
+// no Scope because S0, S1, and Complete S2 must not collect or classify Git
+// changes while binding final source bytes.
+type SnapshotRequest struct {
+	CWD      string
+	Baseline string
+}
+
 // Entry is one baseline-relative final-source entry.
 type Entry struct {
 	Path      string
@@ -104,85 +112,136 @@ func (changes ChangeSet) ScopePassed() bool {
 	return len(changes.OutOfScopeChanges) == 0
 }
 
-// Result is one detached observation result. Its accessors return copies so a
-// later Evidence publisher cannot mutate the state that was observed.
-type Result struct {
-	snapshot         Snapshot
-	snapshotJSON     []byte
+// SnapshotResult is one detached, snapshot-only S0/S1/S2 result. It exposes no
+// layered changes or patch so callers can preserve the frozen phase order.
+type SnapshotResult struct {
+	snapshot     Snapshot
+	snapshotJSON []byte
+}
+
+// Snapshot returns a detached Source Snapshot model.
+func (result SnapshotResult) Snapshot() Snapshot { return cloneSnapshot(result.snapshot) }
+
+// SnapshotJSON returns exact, newline-terminated Source Snapshot artifact bytes.
+func (result SnapshotResult) SnapshotJSON() []byte {
+	return append([]byte(nil), result.snapshotJSON...)
+}
+
+// SnapshotSHA256 returns the digest of the canonical compact Snapshot payload.
+func (result SnapshotResult) SnapshotSHA256() string { return result.snapshot.SHA256 }
+
+// ChangeResult is one detached, post-S1 layered change result. It exposes no
+// Source Snapshot so source binding remains a separate bounded observation.
+type ChangeResult struct {
 	changes          ChangeSet
 	changedFilesJSON []byte
 	diffPatch        []byte
 }
 
-// Snapshot returns a detached Source Snapshot model.
-func (result Result) Snapshot() Snapshot { return cloneSnapshot(result.snapshot) }
-
-// SnapshotJSON returns exact, newline-terminated Source Snapshot artifact bytes.
-func (result Result) SnapshotJSON() []byte { return append([]byte(nil), result.snapshotJSON...) }
-
-// SnapshotSHA256 returns the digest of the canonical compact Snapshot payload.
-func (result Result) SnapshotSHA256() string { return result.snapshot.SHA256 }
-
 // Changes returns a detached layered changed-file model.
-func (result Result) Changes() ChangeSet { return cloneChangeSet(result.changes) }
+func (result ChangeResult) Changes() ChangeSet { return cloneChangeSet(result.changes) }
 
 // ChangedFilesJSON returns exact, newline-terminated changed-files/v1 bytes.
-func (result Result) ChangedFilesJSON() []byte {
+func (result ChangeResult) ChangedFilesJSON() []byte {
 	return append([]byte(nil), result.changedFilesJSON...)
 }
 
 // DiffPatch returns a detached raw binary patch for all product change layers.
-func (result Result) DiffPatch() []byte { return append([]byte(nil), result.diffPatch...) }
+func (result ChangeResult) DiffPatch() []byte { return append([]byte(nil), result.diffPatch...) }
+
+// Result is the detached composite convenience result returned by Observe.
+// Verify and Complete must use ObserveSnapshot and ObserveChanges directly to
+// preserve S0 -> checks -> S1 -> changes/diff ordering.
+type Result struct {
+	snapshot SnapshotResult
+	changes  ChangeResult
+}
+
+// Snapshot returns a detached Source Snapshot model.
+func (result Result) Snapshot() Snapshot { return result.snapshot.Snapshot() }
+
+// SnapshotJSON returns exact, newline-terminated Source Snapshot artifact bytes.
+func (result Result) SnapshotJSON() []byte { return result.snapshot.SnapshotJSON() }
+
+// SnapshotSHA256 returns the digest of the canonical compact Snapshot payload.
+func (result Result) SnapshotSHA256() string { return result.snapshot.SnapshotSHA256() }
+
+// Changes returns a detached layered changed-file model.
+func (result Result) Changes() ChangeSet { return result.changes.Changes() }
+
+// ChangedFilesJSON returns exact, newline-terminated changed-files/v1 bytes.
+func (result Result) ChangedFilesJSON() []byte { return result.changes.ChangedFilesJSON() }
+
+// DiffPatch returns a detached raw binary patch for all product change layers.
+func (result Result) DiffPatch() []byte { return result.changes.DiffPatch() }
+
+// ObserveSnapshot collects only one stable Source Snapshot for Verify S0/S1 or
+// Complete S2. It does not inspect Scope, collect layered changes, or run a
+// patch-producing Git command.
+func ObserveSnapshot(request SnapshotRequest) (SnapshotResult, error) {
+	context, err := resolveContext(request.CWD, request.Baseline)
+	if err != nil {
+		return SnapshotResult{}, err
+	}
+	baselineBlobs := make(map[string]blobIdentity)
+	first, err := collectSnapshotObservation(context, baselineBlobs)
+	if err != nil {
+		return SnapshotResult{}, err
+	}
+	second, err := collectSnapshotObservation(context, baselineBlobs)
+	if err != nil {
+		return SnapshotResult{}, err
+	}
+	if !reflect.DeepEqual(first, second) {
+		return SnapshotResult{}, unstable("Product source changed while the source snapshot was being collected.", nil)
+	}
+
+	snapshot, snapshotJSON, err := buildSnapshot(context.baseline, second.entries)
+	if err != nil {
+		return SnapshotResult{}, err
+	}
+	return SnapshotResult{snapshot: snapshot, snapshotJSON: snapshotJSON}, nil
+}
+
+// ObserveChanges collects layered changed-files state and the raw binary diff
+// after Verify S1. It does not collect a Source Snapshot.
+func ObserveChanges(request Request) (ChangeResult, error) {
+	scope, err := validateScope(request.Scope)
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	context, err := resolveContext(request.CWD, request.Baseline)
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	changes, err := collectChanges(context, scope)
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	changedFilesJSON, err := renderChangedFiles(changes)
+	if err != nil {
+		return ChangeResult{}, repositoryFailure("Could not render changed-files JSON.", err)
+	}
+	diffPatch, err := collectDiffPatch(context, changes)
+	if err != nil {
+		return ChangeResult{}, err
+	}
+	return ChangeResult{changes: changes, changedFilesJSON: changedFilesJSON, diffPatch: diffPatch}, nil
+}
 
 // Observe collects one Source Snapshot, layered changed-files document, and
 // raw binary patch. The final source is observed exactly twice and never
 // retried; any semantic or filesystem-fingerprint disagreement fails closed.
 func Observe(request Request) (Result, error) {
-	scope, err := validateScope(request.Scope)
+	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: request.CWD, Baseline: request.Baseline})
 	if err != nil {
 		return Result{}, err
 	}
-	context, err := resolveContext(request.CWD, request.Baseline)
+	changes, err := ObserveChanges(request)
 	if err != nil {
 		return Result{}, err
 	}
-
-	baselineBlobs := make(map[string]blobIdentity)
-	first, err := collectSnapshotObservation(context, baselineBlobs)
-	if err != nil {
-		return Result{}, err
-	}
-	second, err := collectSnapshotObservation(context, baselineBlobs)
-	if err != nil {
-		return Result{}, err
-	}
-	if !reflect.DeepEqual(first, second) {
-		return Result{}, unstable("Product source changed while the source snapshot was being collected.", nil)
-	}
-
-	snapshot, snapshotJSON, err := buildSnapshot(context.baseline, second.entries)
-	if err != nil {
-		return Result{}, err
-	}
-	changes, err := collectChanges(context, scope)
-	if err != nil {
-		return Result{}, err
-	}
-	changedFilesJSON, err := renderChangedFiles(changes)
-	if err != nil {
-		return Result{}, repositoryFailure("Could not render changed-files JSON.", err)
-	}
-	diffPatch, err := collectDiffPatch(context, changes)
-	if err != nil {
-		return Result{}, err
-	}
-	return Result{
-		snapshot:         snapshot,
-		snapshotJSON:     snapshotJSON,
-		changes:          changes,
-		changedFilesJSON: changedFilesJSON,
-		diffPatch:        diffPatch,
-	}, nil
+	return Result{snapshot: snapshot, changes: changes}, nil
 }
 
 func validateScope(scope []string) ([]string, error) {
