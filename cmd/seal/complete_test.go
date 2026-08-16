@@ -130,6 +130,7 @@ func TestParseCompleteRequiresExplicitIdentities(t *testing.T) {
 		{name: "equals", args: []string{"TASK-1", "--run-id=RUN-1"}, wantTask: "TASK-1", wantRun: "RUN-1"},
 		{name: "last repeated value wins", args: []string{"TASK-1", "--run-id", "RUN-1", "--run-id=RUN-2"}, wantTask: "TASK-1", wantRun: "RUN-2"},
 		{name: "empty equals reaches identity validation", args: []string{"TASK-1", "--run-id="}, wantTask: "TASK-1", wantRun: ""},
+		{name: "empty task reaches identity validation", args: []string{"", "--run-id", "RUN-1"}, wantTask: "", wantRun: "RUN-1"},
 		{name: "terminator", args: []string{"--run-id", "RUN-1", "--", "TASK-1"}, wantTask: "TASK-1", wantRun: "RUN-1"},
 		{name: "trailing terminator", args: []string{"TASK-1", "--run-id", "RUN-1", "--"}, wantTask: "TASK-1", wantRun: "RUN-1"},
 		{name: "missing task", args: []string{"--run-id", "RUN-1"}, wantError: true},
@@ -137,6 +138,7 @@ func TestParseCompleteRequiresExplicitIdentities(t *testing.T) {
 		{name: "missing separated value", args: []string{"TASK-1", "--run-id"}, wantError: true},
 		{name: "option cannot be separated value", args: []string{"TASK-1", "--run-id", "--help"}, wantError: true},
 		{name: "extra positional", args: []string{"TASK-1", "TASK-2", "--run-id", "RUN-1"}, wantError: true},
+		{name: "empty task still occupies positional", args: []string{"", "TASK-2", "--run-id", "RUN-1"}, wantError: true},
 		{name: "unsupported option", args: []string{"TASK-1", "--latest", "--run-id", "RUN-1"}, wantError: true},
 		{name: "argparse prefix alias is not public", args: []string{"TASK-1", "--r", "RUN-1"}, wantError: true},
 	}
@@ -167,6 +169,7 @@ func TestRunCLICompleteHelpHonorsOptionTerminator(t *testing.T) {
 		{name: "short help after identity", args: []string{"complete", "TASK-1", "-h"}, wantHelp: true},
 		{name: "help after valid option", args: []string{"complete", "TASK-1", "--run-id", "RUN-1", "--help"}, wantHelp: true},
 		{name: "help is not a separated value", args: []string{"complete", "TASK-1", "--run-id", "--help"}, wantStderr: "complete requires --run-id"},
+		{name: "terminator is not a separated value", args: []string{"complete", "TASK-1", "--run-id", "--", "--help"}, wantStderr: "complete requires --run-id"},
 		{name: "help after terminator is positional", args: []string{"complete", "--run-id", "RUN-1", "--", "--help"}, wantStderr: "Task id must begin"},
 	}
 	for _, test := range tests {
