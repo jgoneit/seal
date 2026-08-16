@@ -50,7 +50,7 @@ seal run show <TASK_ID> --run-id <RUN_ID>
 seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
-The development version is `0.0.0-dev`.
+The checked-in version is `0.3.0-rc.1`.
 
 `task create` validates and normalizes a Task Spec, resolves catalog check
 references, records the repository's current full HEAD as its baseline, and
