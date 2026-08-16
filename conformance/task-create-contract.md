@@ -256,9 +256,13 @@ The final Task-create conformance matrix is:
 
 The Reference's modes are umask-dependent (`0755`/`0644` under umask `022` and
 `0700`/`0600` under umask `077`), so there are no exact deterministic Reference
-modes to reproduce. This slice fixes newly created Task directories at `0755`
-and snapshots at `0644`, the common Reference result under umask `022`, and
-records that choice as writer hardening rather than exact byte metadata parity.
+modes to reproduce. On POSIX, this slice fixes newly created Task directories at
+`0755` and snapshots at `0644`, the common Reference result under umask `022`,
+and records that choice as writer hardening rather than exact byte metadata
+parity. Windows accepts the same creation requests but does not expose POSIX
+permission bits: Go reports ordinary directories as `0777` and writable files
+as `0666`. The Windows assertions bind those native representations rather than
+claiming POSIX mode enforcement.
 
 ## Write set and exclusions
 
