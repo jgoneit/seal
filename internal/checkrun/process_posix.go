@@ -92,7 +92,11 @@ func (process *posixProcess) cleanupAfterExit() error {
 func (process *posixProcess) close() error { return nil }
 
 func signalProcessGroup(processGroupID int, signal syscall.Signal) error {
-	err := syscall.Kill(-processGroupID, signal)
+	err := settleProcessGroupSignal(
+		processGroupID,
+		signal,
+		syscall.Kill(-processGroupID, signal),
+	)
 	if errors.Is(err, syscall.ESRCH) {
 		return nil
 	}
