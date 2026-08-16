@@ -83,11 +83,13 @@ Atomic publication is claimed only for same-filesystem local POSIX filesystems
 with the required native rename primitive and for NTFS. Network filesystems,
 FUSE implementations, and filesystems without the required no-replace
 operation fail closed or remain outside the support claim. Atomic visibility
-does not imply crash-proof storage: file and pre-publication directory syncs
-are required, while a post-commit parent-directory sync is best effort because
-returning failure after a successful rename would contradict the public commit
-state. An unrelated process with the same operating-system account can still
-race mutable directory names between identity checks on POSIX; that hostile
+does not imply crash-proof storage: artifact file sync is required on every
+supported platform, and pre-publication directory sync is additionally
+required on POSIX. Windows has no portable directory flush in this writer. A
+post-commit parent-directory sync is best effort because returning failure
+after a successful rename would contradict the public commit state. An
+unrelated process with the same operating-system account can still race
+mutable directory names between identity checks on POSIX; that hostile
 same-user race is outside the v1 atomic object-binding guarantee. Windows uses
 handle-relative publication and has no pathname fallback.
 

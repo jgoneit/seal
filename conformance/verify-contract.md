@@ -35,10 +35,11 @@ The handled exit categories are:
 | `3` | Git, source observation, check infrastructure, or publication failure |
 | `1` | supported runtime-representation or success-stdout failure |
 
-Handled failures write no stdout and one `error: ...` line to stderr. A stdout
-failure after commit returns `1` and does not roll back the already published
-Run. Verify never returns Completion exits `4` through `9` for mechanical
-outcomes.
+Handled state and execution failures write no stdout and one `error: ...` line
+to stderr. CLI shape failures write that error followed by the shared usage
+synopsis. A stdout failure after commit returns `1` and does not roll back the
+already published Run. Verify never returns Completion exits `4` through `9`
+for mechanical outcomes.
 
 The command accepts one positional Task identity and no feature flags.
 `-h`/`--help` short-circuits like the frozen parser. `--base-ref`, latest-Run
@@ -167,7 +168,9 @@ mechanical-result, and manifest-digest semantics.
   are rejected.
 - Generated documents and check logs use retained `os.Root` handles. Writer
   files use exclusive creation and mode `0600`.
-- Artifacts and private directories are synchronized before publication.
+- Artifact files are synchronized before publication. POSIX also synchronizes
+  private directories before the rename; Windows has no portable directory
+  flush here and claims atomic visibility on NTFS, not crash durability.
 - Linux uses `renameat2(RENAME_NOREPLACE)`, macOS uses
   `renameatx_np(RENAME_EXCL)`, and Windows uses handle-relative
   `NtSetInformationFile` without replacement. There is no pathname or shell
