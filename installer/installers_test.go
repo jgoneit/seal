@@ -66,15 +66,16 @@ func TestInstallShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(t *te
 		name      string
 		archive   []byte
 		checksums string
+		wantError string
 	}{
-		{name: "checksum mismatch", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  " + asset + "\n"},
-		{name: "missing checksum", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  another-asset.tar.gz\n"},
-		{name: "duplicate checksum", archive: matchingArchive, checksums: validChecksum + validChecksum},
-		{name: "malformed checksum", archive: matchingArchive, checksums: "not-a-sha256  " + asset + "\n"},
-		{name: "malformed duplicate", archive: matchingArchive, checksums: validChecksum + "not-a-sha256  " + asset + "\n"},
-		{name: "uppercase duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("A", 64) + "  " + asset + "\n"},
-		{name: "single-space duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("0", 64) + " " + asset + "\n"},
-		{name: "version mismatch", archive: mismatchedArchive, checksums: checksumLine(mismatchedArchive, asset)},
+		{name: "checksum mismatch", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  " + asset + "\n", wantError: "SHA-256 mismatch for " + asset},
+		{name: "missing checksum", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  another-asset.tar.gz\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "duplicate checksum", archive: matchingArchive, checksums: validChecksum + validChecksum, wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "malformed checksum", archive: matchingArchive, checksums: "not-a-sha256  " + asset + "\n", wantError: "checksums.txt has an invalid SHA-256 for " + asset},
+		{name: "malformed duplicate", archive: matchingArchive, checksums: validChecksum + "not-a-sha256  " + asset + "\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "uppercase duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("A", 64) + "  " + asset + "\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "single-space duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("0", 64) + " " + asset + "\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "version mismatch", archive: mismatchedArchive, checksums: checksumLine(mismatchedArchive, asset), wantError: asset + " does not report requested version"},
 	}
 
 	for _, testCase := range cases {
@@ -93,8 +94,12 @@ func TestInstallShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(t *te
 
 			command := exec.Command("sh", repositoryPath(t, "install.sh"), "--version", installerTestTag)
 			command.Env = installerEnvironment(server.URL, homeDirectory)
-			if output, err := command.CombinedOutput(); err == nil {
+			output, err := command.CombinedOutput()
+			if err == nil {
 				t.Fatalf("install.sh unexpectedly succeeded:\n%s", output)
+			}
+			if !strings.Contains(string(output), testCase.wantError) {
+				t.Fatalf("install.sh error %q does not contain %q", output, testCase.wantError)
 			}
 
 			got, err := os.ReadFile(target)
@@ -227,15 +232,16 @@ func TestInstallPowerShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(
 		name      string
 		archive   []byte
 		checksums string
+		wantError string
 	}{
-		{name: "checksum mismatch", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  " + asset + "\n"},
-		{name: "missing checksum", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  another-asset.zip\n"},
-		{name: "duplicate checksum", archive: matchingArchive, checksums: validChecksum + validChecksum},
-		{name: "malformed checksum", archive: matchingArchive, checksums: "not-a-sha256  " + asset + "\n"},
-		{name: "malformed duplicate", archive: matchingArchive, checksums: validChecksum + "not-a-sha256  " + asset + "\n"},
-		{name: "uppercase duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("A", 64) + "  " + asset + "\n"},
-		{name: "single-space duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("0", 64) + " " + asset + "\n"},
-		{name: "version mismatch", archive: mismatchedArchive, checksums: checksumLine(mismatchedArchive, asset)},
+		{name: "checksum mismatch", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  " + asset + "\n", wantError: "SHA-256 mismatch for " + asset},
+		{name: "missing checksum", archive: matchingArchive, checksums: strings.Repeat("0", 64) + "  another-asset.zip\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "duplicate checksum", archive: matchingArchive, checksums: validChecksum + validChecksum, wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "malformed checksum", archive: matchingArchive, checksums: "not-a-sha256  " + asset + "\n", wantError: "checksums.txt has an invalid SHA-256 for " + asset},
+		{name: "malformed duplicate", archive: matchingArchive, checksums: validChecksum + "not-a-sha256  " + asset + "\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "uppercase duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("A", 64) + "  " + asset + "\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "single-space duplicate", archive: matchingArchive, checksums: validChecksum + strings.Repeat("0", 64) + " " + asset + "\n", wantError: "checksums.txt must contain exactly one entry for " + asset},
+		{name: "version mismatch", archive: mismatchedArchive, checksums: checksumLine(mismatchedArchive, asset), wantError: asset + " does not report requested version"},
 	}
 
 	for _, testCase := range cases {
@@ -254,8 +260,12 @@ func TestInstallPowerShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(
 
 			command := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", installerTestTag)
 			command.Env = installerEnvironment(server.URL, localAppData)
-			if output, err := command.CombinedOutput(); err == nil {
+			output, err := command.CombinedOutput()
+			if err == nil {
 				t.Fatalf("install.ps1 unexpectedly succeeded:\n%s", output)
+			}
+			if !strings.Contains(string(output), testCase.wantError) {
+				t.Fatalf("install.ps1 error %q does not contain %q", output, testCase.wantError)
 			}
 
 			got, err := os.ReadFile(target)
