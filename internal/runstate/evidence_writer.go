@@ -94,25 +94,40 @@ func newEvidenceWriter(repository, taskID string, hooks verifyHooks) (*evidenceW
 		if runExists || stagingExists {
 			continue
 		}
-		if err := createPrivateStagingDirectory(parent, stagingName); err != nil {
+		createdInfo, err := createPrivateStagingDirectory(parent, stagingName)
+		if err != nil {
 			if errors.Is(err, fs.ErrExist) {
 				continue
 			}
 			_ = parent.Close()
 			return nil, &RepositoryError{message: "Could not create the private Evidence staging directory."}
 		}
+		if err := writer.inject("staging-created"); err != nil {
+			cleanupErr := removeCreatedStagingDirectory(parent, stagingName, createdInfo)
+			_ = parent.Close()
+			if cleanupErr != nil {
+				return nil, &RepositoryError{message: "Could not clean the created Evidence staging directory: " + errors.Join(err, cleanupErr).Error()}
+			}
+			return nil, err
+		}
 		staging, err := parent.OpenRoot(stagingName)
 		if err != nil {
-			_ = parent.RemoveAll(stagingName)
+			cleanupErr := removeCreatedStagingDirectory(parent, stagingName, createdInfo)
 			_ = parent.Close()
+			if cleanupErr != nil {
+				return nil, &RepositoryError{message: "Could not open or clean the Evidence staging directory: " + errors.Join(err, cleanupErr).Error()}
+			}
 			return nil, &RepositoryError{message: "Could not open the Evidence staging directory."}
 		}
 		stagingInfo, err := staging.Stat(".")
-		if err != nil || !stagingInfo.IsDir() {
-			_ = staging.Close()
-			_ = parent.RemoveAll(stagingName)
+		if err != nil || !stagingInfo.IsDir() || createdInfo == nil || !os.SameFile(createdInfo, stagingInfo) {
+			if err == nil {
+				err = errors.New("created and reopened staging identities do not match")
+			}
+			closeErr := staging.Close()
+			cleanupErr := removeCreatedStagingDirectory(parent, stagingName, createdInfo)
 			_ = parent.Close()
-			return nil, &RepositoryError{message: "Could not bind the Evidence staging directory identity."}
+			return nil, &RepositoryError{message: "Could not bind the Evidence staging directory identity: " + errors.Join(err, closeErr, cleanupErr).Error()}
 		}
 		writer.runID = runID
 		writer.stagingName = stagingName
@@ -123,6 +138,20 @@ func newEvidenceWriter(repository, taskID string, hooks verifyHooks) (*evidenceW
 	}
 	_ = parent.Close()
 	return nil, &RepositoryError{message: "Could not allocate a unique verification Run id after 100 collisions."}
+}
+
+func removeCreatedStagingDirectory(parent *os.Root, name string, expected fs.FileInfo) error {
+	if expected == nil {
+		return errors.New("created staging identity is unavailable")
+	}
+	named, err := parent.Lstat(name)
+	if err != nil {
+		return fmt.Errorf("could not locate created staging directory during cleanup: %w", err)
+	}
+	if named.Mode()&os.ModeSymlink != 0 || !named.IsDir() || !os.SameFile(expected, named) {
+		return errors.New("staging destination identity changed before cleanup")
+	}
+	return parent.RemoveAll(name)
 }
 
 func ensureRealDirectory(root *os.Root, path string, mode fs.FileMode) error {

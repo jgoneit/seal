@@ -20,7 +20,7 @@ func TestCreatePrivateStagingDirectoryAppliesProtectedInheritedDACL(t *testing.T
 	defer parent.Close()
 
 	const name = ".tmp-0123456789abcdef0123456789abcdef"
-	if err := createPrivateStagingDirectory(parent, name); err != nil {
+	if _, err := createPrivateStagingDirectory(parent, name); err != nil {
 		t.Fatalf("createPrivateStagingDirectory(): %v", err)
 	}
 	defer parent.RemoveAll(name)
@@ -52,7 +52,7 @@ func TestCreatePrivateStagingDirectoryAppliesProtectedInheritedDACL(t *testing.T
 		t.Fatal(err)
 	}
 
-	if err := createPrivateStagingDirectory(parent, name); !errors.Is(err, fs.ErrExist) {
+	if _, err := createPrivateStagingDirectory(parent, name); !errors.Is(err, fs.ErrExist) {
 		t.Fatalf("collision error = %v, want fs.ErrExist", err)
 	}
 }
