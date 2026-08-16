@@ -73,8 +73,10 @@ and narrowly approved destination, alias, and atomic-failure behavior, is
 recorded in `conformance/task-create-contract.md`. The Verify contract,
 including process control, source observation, manifest semantics, writer
 confinement, and whole-directory publication, is recorded in
-`conformance/verify-contract.md`. These slices do not infer a latest identity,
-execute a reviewer, read Verdict, or implement completion.
+`conformance/verify-contract.md`. The separately approved Go v1 Completion
+policy target and immutable v2 record are recorded before implementation in
+`conformance/complete-contract.md`. The implemented slices do not infer a
+latest identity, execute a reviewer, read Verdict, or yet implement Completion.
 
 ## Conformance artifacts
 
@@ -84,6 +86,7 @@ in:
 - `conformance/read-only-contract.md`
 - `conformance/task-create-contract.md`
 - `conformance/verify-contract.md`
+- `conformance/complete-contract.md`
 - `conformance/README.md`
 - `conformance/fixtures/`
 - `conformance/expected/reference-results.json`

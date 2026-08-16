@@ -13,8 +13,10 @@ The Go command spelling changes only the executable name to `seal`. The separate
 `task-create-contract.md` records the Task snapshot writer boundary exercised by
 `cmd/seal/task_create_conformance_test.go`. The separate `verify-contract.md`
 records the check runner, S0/S1 source observation, Evidence documents,
-manifest, and publication boundary. Verdict, Completion, latest-id selection,
-retry, and repair remain outside these slices.
+manifest, and publication boundary. The separate `complete-contract.md` records
+the approved Go v1 Completion policy transition and immutable v2 record before
+that command is implemented. Verdict, latest-id selection, retry, and repair
+remain outside these slices.
 
 The closed Task-create matrix contains 102 classified cases: 88 exact
 Reference-contract cases, 14 approved Go writer divergences, and zero blocked
@@ -26,7 +28,10 @@ in `task-create-contract.md`.
 ```text
 conformance/
 ├── README.md
+├── complete-contract.md
 ├── read-only-contract.md
+├── task-create-contract.md
+├── verify-contract.md
 ├── expected/
 │   └── reference-results.json
 └── fixtures/
