@@ -228,10 +228,9 @@ jobs:
             printf '%s\n' "release ${GITHUB_REF_NAME} already exists; tags and releases are not reused" >&2
             exit 1
           fi
-          release_flags=(--verify-tag --generate-notes --title "Seal ${GITHUB_REF_NAME}")
-          case "${GITHUB_REF_NAME}" in
-            *-rc.*) release_flags+=(--prerelease --latest=false) ;;
-          esac
+          # Every release starts as a non-Latest prerelease. A stable tag is
+          # promoted only after both public installers pass below.
+          release_flags=(--verify-tag --generate-notes --title "Seal ${GITHUB_REF_NAME}" --prerelease --latest=false)
           gh release create "${GITHUB_REF_NAME}" \
             dist/seal_* \
             dist/checksums.txt \
@@ -266,10 +265,16 @@ jobs:
         run: |
           set -euo pipefail
           install_home="${RUNNER_TEMP}/seal-install-home"
+          install_tmp="${RUNNER_TEMP}/seal-install-tmp"
           output="${RUNNER_TEMP}/seal-install.out"
           error_output="${RUNNER_TEMP}/seal-install.err"
-          mkdir -p "${install_home}"
-          if ! HOME="${install_home}" sh ./install.sh --version "${GITHUB_REF_NAME}" >"${output}" 2>"${error_output}"; then
+          mkdir -p "${install_home}" "${install_tmp}"
+          target="${install_home}/.local/bin/seal"
+          if [[ -e "${target}" || -L "${target}" ]]; then
+            printf '%s\n' "clean-install target already exists" >&2
+            exit 1
+          fi
+          if ! HOME="${install_home}" TMPDIR="${install_tmp}" SEAL_RELEASE_BASE_URL= sh ./install.sh --version "${GITHUB_REF_NAME}" >"${output}" 2>"${error_output}"; then
             cat "${output}" >&2
             cat "${error_output}" >&2
             exit 1
@@ -279,7 +284,6 @@ jobs:
             cat "${error_output}" >&2
             exit 1
           fi
-          target="${install_home}/.local/bin/seal"
           expected_version="${GITHUB_REF_NAME#v}"
           actual_version="$("${target}" --version)"
           if [[ "${actual_version}" != "${expected_version}" ]]; then
@@ -290,10 +294,15 @@ jobs:
             printf '%s\n' "installer output omitted the absolute target" >&2
             exit 1
           fi
-          shopt -s nullglob
+          shopt -s nullglob dotglob
           residue=("${install_home}/.local/bin"/.seal-*)
           if (( ${#residue[@]} != 0 )); then
             printf '%s\n' "installer left staging or backup residue" >&2
+            exit 1
+          fi
+          temporary_residue=("${install_tmp}"/*)
+          if (( ${#temporary_residue[@]} != 0 )); then
+            printf '%s\n' "installer left download or extraction residue" >&2
             exit 1
           fi
 
@@ -309,11 +318,23 @@ jobs:
         shell: pwsh
         run: |
           $localAppData = Join-Path $env:RUNNER_TEMP "seal-install-localappdata"
+          $temporaryRoot = Join-Path $env:RUNNER_TEMP "seal-install-tmp"
           $outputPath = Join-Path $env:RUNNER_TEMP "seal-install.out"
           $errorPath = Join-Path $env:RUNNER_TEMP "seal-install.err"
-          New-Item -ItemType Directory -Force -Path $localAppData | Out-Null
+          New-Item -ItemType Directory -Force -Path $localAppData, $temporaryRoot | Out-Null
           $env:LOCALAPPDATA = $localAppData
-          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -Version $env:GITHUB_REF_NAME 1> $outputPath 2> $errorPath
+          $env:TEMP = $temporaryRoot
+          $env:TMP = $temporaryRoot
+          Remove-Item Env:SEAL_RELEASE_BASE_URL -ErrorAction SilentlyContinue
+          $target = Join-Path $localAppData "Programs\Seal\bin\seal.exe"
+          if (Test-Path -LiteralPath $target) {
+            throw "clean-install target already exists"
+          }
+          $windowsPowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+          if (-not [System.IO.File]::Exists($windowsPowerShell)) {
+            throw "Windows PowerShell 5.1 is unavailable at $windowsPowerShell"
+          }
+          & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .\install.ps1 -Version $env:GITHUB_REF_NAME 1> $outputPath 2> $errorPath
           if ($LASTEXITCODE -ne 0) {
             Get-Content -LiteralPath $outputPath -ErrorAction SilentlyContinue | Write-Error
             Get-Content -LiteralPath $errorPath -ErrorAction SilentlyContinue | Write-Error
@@ -323,7 +344,6 @@ jobs:
             Get-Content -LiteralPath $errorPath | Write-Error
             throw "installer wrote unexpected stderr"
           }
-          $target = Join-Path $localAppData "Programs\Seal\bin\seal.exe"
           $versionError = Join-Path $env:RUNNER_TEMP "installed-version.err"
           $actualVersion = @(& $target --version 2> $versionError)
           $expectedVersion = $env:GITHUB_REF_NAME.Substring(1)
@@ -338,3 +358,23 @@ jobs:
           if ($residue.Count -ne 0) {
             throw "installer left staging or backup residue: $($residue.FullName -join ', ')"
           }
+          $temporaryResidue = @(Get-ChildItem -LiteralPath $temporaryRoot -Force)
+          if ($temporaryResidue.Count -ne 0) {
+            throw "installer left download or extraction residue: $($temporaryResidue.FullName -join ', ')"
+          }
+
+  promote-stable:
+    name: Promote stable Release
+    if: ${{ !contains(github.ref_name, '-rc.') }}
+    needs:
+      - smoke-install-unix
+      - smoke-install-windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Mark validated stable Release latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --prerelease=false --latest
