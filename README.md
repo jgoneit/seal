@@ -124,7 +124,7 @@ curl -fsSL "https://raw.githubusercontent.com/jgoneit/seal/${tag}/install.sh" \
 sh "${installer}" --version "${tag}"
 ```
 
-The default target is `$HOME/.local/bin/seal`. The installer downloads only the
+The fixed target is `$HOME/.local/bin/seal`. The installer downloads only the
 requested tag's native archive and checksum file, requires exactly one matching
 SHA-256 entry, validates the archive shape and embedded binary version, then
 smoke-tests the absolute installed path. It reports when the target directory
@@ -143,7 +143,7 @@ try {
 }
 ```
 
-The default Windows target is
+The fixed Windows target is
 `$LOCALAPPDATA\Programs\Seal\bin\seal.exe`. Neither installer uses `sudo`,
 edits a shell profile, enables auto-update, installs Git, or makes a Seal
 Acceptance decision. A download, checksum, archive, or version failure leaves

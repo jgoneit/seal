@@ -76,12 +76,11 @@ publication rather than overwriting assets or moving the tag.
 `install.sh --version <TAG>` and `install.ps1 -Version <TAG>` are the only
 public installer forms. The installers do not select a latest release.
 
-Repository integration tests set two environment variables:
+Repository integration tests set one installer-specific environment variable:
 
 - `SEAL_RELEASE_BASE_URL` points to an isolated local release server.
-- `SEAL_INSTALL_DIR` points to a disposable absolute destination.
 
-These variables exist only for deterministic installer tests; they are not a
-supported alternate distribution channel or system-wide installation mode.
-The production defaults remain `$HOME/.local/bin` and
-`$LOCALAPPDATA\Programs\Seal\bin`.
+This variable exists only for deterministic installer tests; it is not a
+supported alternate distribution channel. Tests isolate the ordinary `HOME`
+or `LOCALAPPDATA` environment. There is no destination override: the fixed
+targets are `$HOME/.local/bin` and `$LOCALAPPDATA\Programs\Seal\bin`.
