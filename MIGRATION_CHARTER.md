@@ -31,8 +31,11 @@ Migration work proceeds as small vertical slices:
    separately reviewed and approved.
 
 Python remains authoritative for Acceptance semantics. An explicitly approved
-resource-limit divergence may be retained only when its narrow scope is
-recorded in the conformance contract and protected by a regression test.
+non-semantic resource-limit or invocation-environment divergence may be
+retained only when its narrow scope is recorded in the conformance contract and
+protected by a regression test. Such an exception must not change Task or Run
+identity, mechanical state, Scope, required checks, source stability, Evidence
+or manifest integrity, or Completion meaning.
 
 Persisted root and Evidence compatibility must be decided before the first Go
 writer is introduced. This bootstrap creates no runtime data and makes no

@@ -76,8 +76,9 @@ these recorded edge cases.
 CPython's integer-string conversion limit is likewise part of the frozen
 behavior. Decoding a positive decimal integer with 4,301 digits raises an
 unhandled `ValueError`, produces no stdout, and exits 1. The same failure occurs
-when canonical Run validation first decodes an otherwise matching saved Task
-containing that value.
+when canonical Run validation first decodes a saved Task or Evidence JSON
+document containing that value, and it takes precedence when a later token in
+the same document has an ordinary JSON syntax error.
 
 ## `run show`
 
@@ -138,6 +139,11 @@ The exact observed conditions are:
   the repository.
 - Every Evidence path must be a non-empty relative POSIX path without an
   absolute root, drive prefix, backslash, NUL, empty component, `.`, or `..`.
+- Frozen Scope and changed-file validation treats any path whose second byte is
+  `:` as drive-prefixed, so `1:file`, `_:file`, `C:file`, and `C:/file` are all
+  rejected there. Source Snapshot path validation accepts the same four byte
+  strings. This Reference asymmetry is preserved; neither value is opened as a
+  filesystem path by these validation steps.
 - An Evidence file may be a symlink when strict resolution succeeds, the
   resolved target is a regular file, and the target remains inside the
   resolved Run directory.
@@ -160,7 +166,7 @@ is returned. This is another known frozen security limitation.
 | Exit | Meaning for these commands |
 | ---: | --- |
 | 0 | Stored Task object or structurally valid Run was read; a valid Run may have mechanical result `pass` or `fail`. |
-| 1 | A stored-Task encoding or numeric conversion failure, or the approved Go JSON nesting resource limit. |
+| 1 | A stored-Task encoding or numeric conversion failure, or a runtime failure recorded below. |
 | 2 | Invalid CLI identity/input or stored Task/Run identity contradiction. |
 | 3 | Repository-root resolution failed. |
 | 8 | Evidence is missing, malformed, contradictory, unsupported, unsafe, or tampered. |
@@ -171,7 +177,15 @@ to stderr. In the frozen numeric/surrogateescape edge cases above, the bytes
 are authoritative even when they are not strict UTF-8 JSON. Completion-only
 exits are not used by `run show`.
 
-## Approved divergence: bounded JSON nesting/resource limit
+## Approved divergences
+
+These exceptions are narrow compatibility decisions for non-semantic resource
+or invocation-environment failures. Python remains authoritative for
+Acceptance semantics, and the exceptions do not permit different Task or Run
+identity, mechanical result, Scope, required-check result, source stability,
+Evidence digest, manifest integrity, path confinement, or Completion meaning.
+
+### Bounded `task show` JSON nesting/resource limit
 
 The frozen Reference accepts a stored Task object whose value contains 10,000
 nested arrays, returns exit 0, leaves stderr empty, and renders roughly 200 MB
@@ -195,6 +209,50 @@ Reference's roughly 200 MB rendering would require a custom parser or formatter
 whose implementation, security, and maintenance cost is not justified by this
 Acceptance slice. The regression generates the input in a temporary directory;
 the huge input/output is not stored in the repository corpus.
+
+### Bounded Run Task-extra JSON nesting/resource limit
+
+For matching saved and Evidence Task snapshots, the frozen Reference traverses
+opaque extra fields while comparing the two objects. On the pinned Python
+runtime, otherwise valid nested extras succeed or raise an unhandled
+`RecursionError` at an order-dependent boundary: the observed threshold changes
+between approximately 989 and 993 nested containers according to object-key
+position and traversal state. At 10,000 levels the Reference exits 1 before it
+can return a Run summary.
+
+The Go Candidate does not reproduce that CPython call-stack and key-order
+accident with a custom order-preserving parser. Matching opaque Task extras are
+accepted up to the Go standard JSON implementation's nesting bound. When that
+bound is exceeded while decoding the saved Task or the Run's `task.json`, Go
+returns runtime exit 1 with empty stdout and a deterministic handled error.
+The same depth failure in checks, verification, a Source Snapshot, or the Run
+manifest remains an Evidence error with exit 8. A saved/Evidence Task mismatch
+that can be decoded remains an identity error with exit 2.
+
+This policy changes only when an opaque matching Task extra becomes too costly
+to decode. The fields that establish Acceptance meaning are still validated,
+and their identity, mechanical, Scope, check, source, and integrity outcomes
+may not diverge under this approval. Regression inputs are generated in a
+temporary directory instead of committing huge nested documents.
+
+### Deleted or unlinked current working directory
+
+When a process starts in a directory that is subsequently unlinked, the frozen
+Reference's `task show` and `run show` let `Path.cwd()` raise an unhandled
+`FileNotFoundError`, producing exit 1 and a Python traceback. The Go Candidate
+instead classifies this invocation precondition as repository resolution: both
+state commands with otherwise valid identities and options return exit 3,
+leave stdout empty, and write exactly
+`error: Task commands must run inside a Git repository.` followed by a newline.
+Informational `--help` and `--version` calls do not resolve the working
+directory and remain exit 0 with the same bytes as in a normal directory.
+Invalid identities and command shapes are still rejected first with exit 2.
+
+This is an invocation-environment classification only. No Task or Run is read,
+validated, selected, repaired, or advanced when the current directory cannot
+be resolved. In particular, this stable error does not direct a model, choose a
+tool, retry work, infer a latest Run, execute a Reviewer, or perform a lifecycle
+transition. The user, Native Agent, or CI remains responsible for composition.
 
 ## Read-only and trust properties
 

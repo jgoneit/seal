@@ -31,7 +31,7 @@ conformance/
 ```
 
 `base-pass` is the only materialized state tree. `cases.json` supplies exact
-layout deltas and mutation recipes for 71 observed cases. This keeps the
+layout deltas and mutation recipes for 74 observed cases. This keeps the
 fixture immutable and avoids duplicating nearly identical Run trees.
 `reference-results.json` records the observed exit code, semantic stdout JSON,
 stderr category, and normalized stderr message for every case. The case and
@@ -74,27 +74,40 @@ There are frozen Python edge cases where “JSON stdout” is not strict UTF-8
 RFC 8259 JSON: Python may emit `Infinity`, and POSIX surrogateescape code
 points U+DC80–U+DCFF are restored to their raw bytes. For any result containing
 `stdout_raw_hex`, those exact bytes are authoritative over `stdout_json`.
-Malformed raw UTF-8 in a stored Task instead escapes the handled-error boundary
-as an exit-1 `UnicodeDecodeError`; only its terminal exception is portable
-across Reference installation paths.
+Malformed raw UTF-8 in a stored Task escapes `task show` as an exit-1
+`UnicodeDecodeError`; `run show` catches the same saved-Task decoding failure
+and returns the handled invalid-input exit 2. Only the unhandled terminal
+exception is portable across Reference installation paths.
 
 CPython's default integer-string conversion guard is also observable. A
 positive 4,301-digit decimal integer exceeds the 4,300-digit limit and escapes
 the handled boundary as exit 1 with a terminal `ValueError`. `cases.json`
 expresses the number as a compact repeat specification rather than storing the
-large lexeme in every artifact.
+large lexeme in every artifact. `write_repeated_utf8` likewise constructs the
+integer-before-syntax fixtures only inside disposable repositories, so the
+4,301-digit lexeme is not checked in.
 
-## Approved bounded-nesting divergence
+## Approved Go-only divergence regressions
 
-A stored Task object containing 10,000 nested arrays is the one explicitly
-approved resource-limit divergence: the frozen Reference returns exit 0 and
-renders roughly 200 MB, while Go keeps the standard `encoding/json` nesting
-bound and returns exit 1 with empty stdout. The Go regression
-`TestRunCLITaskShowAppliesApprovedJSONDepthLimitWithoutWrites` generates the
-small nested input in a temporary directory and verifies the exit, streams,
-and no-write contract. Neither the huge Reference stdout nor a materialized
-fixture is committed. The exact narrow approval is recorded in
-`read-only-contract.md` and does not weaken any Acceptance-semantic contract.
+The 74 declarative cases above are exact frozen-Reference observations and Go
+parity gates. They do not include these separately approved Go-only divergence
+regressions, whose compact inputs are generated only in temporary trees:
+
+- `task show` on a stored Task containing 10,000 nested arrays: the Reference
+  returns exit 0 and renders roughly 200 MB, while Go keeps the standard
+  `encoding/json` nesting bound and returns runtime exit 1 with empty stdout;
+- `run show` with deeply nested matching opaque Task extras: Go keeps that same
+  standard-library bound and deterministic classifications instead of
+  reproducing CPython's order-dependent `RecursionError` threshold;
+- otherwise valid `task show` and `run show` calls from a deleted current
+  working directory: the Reference raises `FileNotFoundError` with exit 1,
+  while Go returns the stable repository-resolution exit 3; invalid command
+  shapes and identities remain exit 2.
+
+The Go regressions verify streams, classification, and no-write behavior
+without committing the huge Reference output or materialized depth fixtures.
+The exact narrow approvals are recorded in `read-only-contract.md`; they do not
+permit different Acceptance-semantic outcomes.
 
 The frozen Reference has two material security limitations represented rather
 than repaired here:
