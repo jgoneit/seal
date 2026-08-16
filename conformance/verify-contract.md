@@ -168,6 +168,11 @@ mechanical-result, and manifest-digest semantics.
   `0700`. Windows applies a protected DACL that grants inheritable full access
   only to the current process-token user and LocalSystem before any artifact is
   written.
+- The writer records the created staging object's identity; on Windows that
+  identity comes from the original `NtCreateFile` handle before it is closed.
+  The subsequently retained `os.Root` must identify the same object before any
+  artifact is written. A create-to-reopen name swap is exit `3`, and the
+  replacement object is not removed or modified.
 - Writer ancestors `.seal`, `.seal/evidence`, and the Task Evidence directory
   must be real directories. Symlinks, non-directories, and repository escape
   are rejected.

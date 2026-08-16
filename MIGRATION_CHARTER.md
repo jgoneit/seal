@@ -77,8 +77,12 @@ For the Evidence writer only, Go prevalidates the saved Task and check
 definitions before S0, writes into a private sibling staging directory, and
 publishes the complete directory with a native no-replace rename. Private means
 mode `0700` on POSIX and, on Windows, a protected inheritable DACL containing
-only the current process-token user and LocalSystem. It rejects symlinked or
-non-directory writer ancestors and repository escape. These are approved
+only the current process-token user and LocalSystem. The writer binds the
+retained staging root to the created object identity before writing; Windows
+captures that identity from the original creation handle. A replacement in the
+create-to-reopen interval is rejected without deleting or modifying the
+replacement. It rejects symlinked or non-directory writer ancestors and
+repository escape. These are approved
 writer-safety and whole-directory atomicity divergences from the frozen writer,
 which exposes incomplete Run directories after some failures. They do not
 change the recorded Task, check, Scope, source, verification, or manifest
