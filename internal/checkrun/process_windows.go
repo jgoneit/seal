@@ -67,6 +67,21 @@ func startProcess(
 		return nil, err
 	}
 	defer windows.CloseHandle(stderrHandle)
+	attributeList, err := windows.NewProcThreadAttributeList(1)
+	if err != nil {
+		_ = process.close()
+		return nil, err
+	}
+	defer attributeList.Delete()
+	inheritedHandles := []windows.Handle{stdinHandle, stdoutHandle, stderrHandle}
+	if err := attributeList.Update(
+		windows.PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+		unsafe.Pointer(&inheritedHandles[0]),
+		uintptr(len(inheritedHandles))*unsafe.Sizeof(inheritedHandles[0]),
+	); err != nil {
+		_ = process.close()
+		return nil, err
+	}
 
 	executable, err := exec.LookPath(argv[0])
 	if err != nil {
@@ -88,14 +103,21 @@ func startProcess(
 		_ = process.close()
 		return nil, err
 	}
-	startup := windows.StartupInfo{
-		Cb:        uint32(unsafe.Sizeof(windows.StartupInfo{})),
-		Flags:     windows.STARTF_USESTDHANDLES,
-		StdInput:  stdinHandle,
-		StdOutput: stdoutHandle,
-		StdErr:    stderrHandle,
+	startup := windows.StartupInfoEx{
+		StartupInfo: windows.StartupInfo{
+			Cb:        uint32(unsafe.Sizeof(windows.StartupInfoEx{})),
+			Flags:     windows.STARTF_USESTDHANDLES,
+			StdInput:  stdinHandle,
+			StdOutput: stdoutHandle,
+			StdErr:    stderrHandle,
+		},
+		ProcThreadAttributeList: attributeList.List(),
 	}
-	creationFlags := uint32(windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP)
+	creationFlags := uint32(
+		windows.CREATE_SUSPENDED |
+			windows.CREATE_NEW_PROCESS_GROUP |
+			windows.EXTENDED_STARTUPINFO_PRESENT,
+	)
 	if err := windows.CreateProcess(
 		application,
 		commandLine,
@@ -105,7 +127,7 @@ func startProcess(
 		creationFlags,
 		nil,
 		currentDirectory,
-		&startup,
+		&startup.StartupInfo,
 		&processInformation,
 	); err != nil {
 		_ = process.close()
