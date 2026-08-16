@@ -55,7 +55,7 @@ The Go codebase does not copy or mirror:
 - historical planning documents or compatibility branches
 - provider SDKs or automatic reviewer execution
 - Knowledge or Security functionality
-- retry, repair, latest-identity inference, or process control
+- retry, repair, or latest-identity inference
 
 ## Implemented conformance slices
 
@@ -64,14 +64,17 @@ The Go successor implements these compatibility slices:
 ```text
 seal task create --file <TASK_JSON> [--force]
 seal task show <TASK_ID>
+seal verify <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
 ```
 
 The Task-create writer contract, including its frozen runtime-exit categories
 and narrowly approved destination, alias, and atomic-failure behavior, is
-recorded in `conformance/task-create-contract.md`. These slices do not write
-Evidence, infer a latest identity, execute a reviewer, or implement verification
-or completion.
+recorded in `conformance/task-create-contract.md`. The Verify contract,
+including process control, source observation, manifest semantics, writer
+confinement, and whole-directory publication, is recorded in
+`conformance/verify-contract.md`. These slices do not infer a latest identity,
+execute a reviewer, read Verdict, or implement completion.
 
 ## Conformance artifacts
 
@@ -80,6 +83,7 @@ in:
 
 - `conformance/read-only-contract.md`
 - `conformance/task-create-contract.md`
+- `conformance/verify-contract.md`
 - `conformance/README.md`
 - `conformance/fixtures/`
 - `conformance/expected/reference-results.json`

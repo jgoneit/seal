@@ -6,6 +6,7 @@ package checkrun
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -81,14 +82,55 @@ func Run(checks []Definition, repositoryRoot, evidenceDirectory string) ([]Resul
 	if err != nil {
 		return nil, err
 	}
+	root, err := os.OpenRoot(evidenceRoot)
+	if err != nil {
+		return nil, infrastructure("Could not open check Evidence directory.", err)
+	}
+	defer root.Close()
+	return runRooted(checks, workingDirectory, root)
+}
 
-	outputDirectory := filepath.Join(evidenceRoot, "checks")
-	if err := os.MkdirAll(outputDirectory, 0o700); err != nil {
+// RunRooted executes checks while creating every log relative to an already
+// opened Evidence root. The caller retains ownership of evidenceRoot. This is
+// the publication-safe entry point: it never reconstructs a mutable absolute
+// path for logs.
+func RunRooted(checks []Definition, repositoryRoot string, evidenceRoot *os.Root) ([]Result, error) {
+	workingDirectory, err := resolveDirectory(repositoryRoot, "check working directory")
+	if err != nil {
+		return nil, err
+	}
+	if evidenceRoot == nil {
+		return nil, infrastructure("Could not use check Evidence directory.", errors.New("nil Evidence root"))
+	}
+	info, err := evidenceRoot.Stat(".")
+	if err != nil || !info.IsDir() {
+		if err == nil {
+			err = errors.New("Evidence root is not a directory")
+		}
+		return nil, infrastructure("Could not use check Evidence directory.", err)
+	}
+	return runRooted(checks, workingDirectory, evidenceRoot)
+}
+
+func runRooted(checks []Definition, workingDirectory string, evidenceRoot *os.Root) ([]Result, error) {
+	if err := evidenceRoot.Mkdir("checks", 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, infrastructure("Could not create check log directory.", err)
 	}
-	if err := os.Chmod(outputDirectory, 0o700); err != nil {
+	info, err := evidenceRoot.Lstat("checks")
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		if err == nil {
+			err = errors.New("check log path is not a real directory")
+		}
+		return nil, infrastructure("Could not use check log directory.", err)
+	}
+	if err := evidenceRoot.Chmod("checks", 0o700); err != nil {
 		return nil, infrastructure("Could not make check log directory private.", err)
 	}
+	outputDirectory, err := evidenceRoot.OpenRoot("checks")
+	if err != nil {
+		return nil, infrastructure("Could not open check log directory.", err)
+	}
+	defer outputDirectory.Close()
 
 	results := make([]Result, 0, len(checks))
 	for index, supplied := range checks {
@@ -101,7 +143,6 @@ func Run(checks []Definition, repositoryRoot, evidenceDirectory string) ([]Resul
 			timeout,
 			index,
 			workingDirectory,
-			evidenceRoot,
 			outputDirectory,
 		)
 		if err != nil {
@@ -117,20 +158,19 @@ func runOne(
 	timeout *big.Int,
 	index int,
 	workingDirectory string,
-	evidenceRoot string,
-	outputDirectory string,
+	outputDirectory *os.Root,
 ) (Result, error) {
 	startedAt := utcTimestamp(time.Now())
 	started := time.Now()
 	stem := outputStem(index, definition.Name)
-	stdoutPath := filepath.Join(outputDirectory, stem+".stdout")
-	stderrPath := filepath.Join(outputDirectory, stem+".stderr")
+	stdoutName := stem + ".stdout"
+	stderrName := stem + ".stderr"
 
-	stdout, err := openPrivateLog(stdoutPath)
+	stdout, err := openPrivateLog(outputDirectory, stdoutName)
 	if err != nil {
 		return Result{}, infrastructure("Could not open check stdout log.", err)
 	}
-	stderr, err := openPrivateLog(stderrPath)
+	stderr, err := openPrivateLog(outputDirectory, stderrName)
 	if err != nil {
 		_ = stdout.Close()
 		return Result{}, infrastructure("Could not open check stderr log.", err)
@@ -204,8 +244,8 @@ func runOne(
 		Passed:           passed,
 		Required:         definition.Required,
 		StartedAt:        startedAt,
-		StderrPath:       filepath.ToSlash(relativeLogPath(evidenceRoot, stderrPath)),
-		StdoutPath:       filepath.ToSlash(relativeLogPath(evidenceRoot, stdoutPath)),
+		StderrPath:       filepath.ToSlash(filepath.Join("checks", stderrName)),
+		StdoutPath:       filepath.ToSlash(filepath.Join("checks", stdoutName)),
 		TimedOut:         timedOut,
 	}, nil
 }
@@ -338,8 +378,8 @@ func asciiFilenameCharacter(character rune) bool {
 		character == '_' || character == '.' || character == '-'
 }
 
-func openPrivateLog(path string) (*os.File, error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+func openPrivateLog(root *os.Root, name string) (*os.File, error) {
+	file, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -348,15 +388,6 @@ func openPrivateLog(path string) (*os.File, error) {
 		return nil, err
 	}
 	return file, nil
-}
-
-func relativeLogPath(root, path string) string {
-	relative, err := filepath.Rel(root, path)
-	if err != nil {
-		// Both paths were constructed from the same resolved root.
-		panic(err)
-	}
-	return relative
 }
 
 func utcTimestamp(value time.Time) string {

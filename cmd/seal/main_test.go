@@ -32,6 +32,8 @@ func TestRunCLIInformationalCommands(t *testing.T) {
 		{name: "task create long help", args: []string{"task", "create", "--help"}, wantOutput: taskCreateHelp},
 		{name: "task create short help", args: []string{"task", "create", "-h"}, wantOutput: taskCreateHelp},
 		{name: "task create help after options", args: []string{"task", "create", "--force", "--file=input.json", "--help"}, wantOutput: taskCreateHelp},
+		{name: "verify long help", args: []string{"verify", "--help"}, wantOutput: verifyHelp},
+		{name: "verify short help", args: []string{"verify", "TASK-001", "-h"}, wantOutput: verifyHelp},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -66,6 +68,7 @@ func TestMainInformationalCommandsIgnoreDeletedWorkingDirectory(t *testing.T) {
 		{name: "version", args: []string{"--version"}, wantOutput: version + "\n"},
 		{name: "task create long help", args: []string{"task", "create", "--help"}, wantOutput: taskCreateHelp},
 		{name: "task create short help", args: []string{"task", "create", "-h"}, wantOutput: taskCreateHelp},
+		{name: "verify help", args: []string{"verify", "--help"}, wantOutput: verifyHelp},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -112,6 +115,12 @@ func TestMainStateCommandsApplyApprovedDeletedCWDRepositoryFailureWithoutWrites(
 			wantStderr: "error: Task commands must run inside a Git repository.\n",
 		},
 		{
+			name:       "valid verify",
+			args:       []string{"verify", "TASK-001"},
+			wantCode:   3,
+			wantStderr: "error: Task commands must run inside a Git repository.\n",
+		},
+		{
 			name:       "invalid task id remains invalid input",
 			args:       []string{"task", "show", "../TASK-001"},
 			wantCode:   2,
@@ -130,6 +139,7 @@ func TestMainStateCommandsApplyApprovedDeletedCWDRepositoryFailureWithoutWrites(
 			wantStderr: "error: run show requires --run-id <RUN_ID>\n" +
 				"usage: seal task create --file <TASK_JSON> [--force]\n" +
 				"       seal task show <TASK_ID>\n" +
+				"       seal verify <TASK_ID>\n" +
 				"       seal run show <TASK_ID> --run-id <RUN_ID>\n",
 		},
 	}

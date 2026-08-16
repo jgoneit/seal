@@ -11,9 +11,10 @@ seal-legacy run show <TASK_ID> --run-id <RUN_ID>
 
 The Go command spelling changes only the executable name to `seal`. The separate
 `task-create-contract.md` records the Task snapshot writer boundary exercised by
-`cmd/seal/task_create_conformance_test.go`. No check runner, current-source
-comparison, Verdict, Completion, latest-id selection, retry, or repair behavior
-is represented here.
+`cmd/seal/task_create_conformance_test.go`. The separate `verify-contract.md`
+records the check runner, S0/S1 source observation, Evidence documents,
+manifest, and publication boundary. Verdict, Completion, latest-id selection,
+retry, and repair remain outside these slices.
 
 The closed Task-create matrix contains 102 classified cases: 88 exact
 Reference-contract cases, 14 approved Go writer divergences, and zero blocked
