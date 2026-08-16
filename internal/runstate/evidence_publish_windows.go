@@ -95,7 +95,7 @@ func openDirectoryForRename(parent windows.Handle, name string) (windows.Handle,
 	var allocationSize int64
 	err = windows.NtCreateFile(
 		&handle,
-		windows.DELETE|windows.SYNCHRONIZE,
+		windows.DELETE|windows.SYNCHRONIZE|windows.FILE_READ_ATTRIBUTES,
 		attributes,
 		&status,
 		&allocationSize,

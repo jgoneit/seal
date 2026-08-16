@@ -57,6 +57,20 @@ func createPrivateStagingDirectory(parent *os.Root, name string) error {
 		return err
 	}
 	pinner.Pin(acl)
+	securityDescriptor, err := windows.NewSecurityDescriptor()
+	if err != nil {
+		return err
+	}
+	if err := securityDescriptor.SetDACL(acl, true, false); err != nil {
+		return err
+	}
+	if err := securityDescriptor.SetControl(
+		windows.SE_DACL_PROTECTED,
+		windows.SE_DACL_PROTECTED,
+	); err != nil {
+		return err
+	}
+	pinner.Pin(securityDescriptor)
 
 	parentDirectory, err := parent.Open(".")
 	if err != nil {
@@ -69,10 +83,11 @@ func createPrivateStagingDirectory(parent *os.Root, name string) error {
 		return err
 	}
 	attributes := &windows.OBJECT_ATTRIBUTES{
-		Length:        uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})),
-		RootDirectory: windows.Handle(parentDirectory.Fd()),
-		ObjectName:    objectName,
-		Attributes:    windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE,
+		Length:             uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})),
+		RootDirectory:      windows.Handle(parentDirectory.Fd()),
+		ObjectName:         objectName,
+		Attributes:         windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE,
+		SecurityDescriptor: securityDescriptor,
 	}
 	var directory windows.Handle
 	var status windows.IO_STATUS_BLOCK
@@ -97,21 +112,12 @@ func createPrivateStagingDirectory(parent *os.Root, name string) error {
 		return ntStatusErrno(err)
 	}
 
-	securityErr := windows.SetSecurityInfo(
-		directory,
-		windows.SE_FILE_OBJECT,
-		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
-		nil,
-		nil,
-		acl,
-		nil,
-	)
 	closeErr := windows.CloseHandle(directory)
-	if securityErr == nil && closeErr == nil {
+	if closeErr == nil {
 		return nil
 	}
 	cleanupErr := parent.RemoveAll(name)
-	return errors.Join(securityErr, closeErr, cleanupErr)
+	return errors.Join(closeErr, cleanupErr)
 }
 
 func ntStatusErrno(err error) error {
