@@ -97,8 +97,8 @@ func assertPrivateStagingDACL(t *testing.T, handle windows.Handle, inherited boo
 		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
 			t.Fatalf("ACE %d type = %d, want ACCESS_ALLOWED_ACE_TYPE", index, ace.Header.AceType)
 		}
-		if ace.Mask&windows.GENERIC_ALL == 0 {
-			t.Fatalf("ACE %d mask = %#x, want GENERIC_ALL", index, ace.Mask)
+		if !windowsFileMaskHasFullControl(ace.Mask) {
+			t.Fatalf("ACE %d mask = %#x, want GENERIC_ALL or expanded FILE_ALL_ACCESS", index, ace.Mask)
 		}
 		flags := uint32(ace.Header.AceFlags)
 		if inherited {

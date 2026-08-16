@@ -108,7 +108,7 @@ func assertPrivateCompletionDACL(t *testing.T, handle windows.Handle) {
 		if err := windows.GetAce(dacl, uint32(index), &ace); err != nil {
 			t.Fatalf("GetAce(%d): %v", index, err)
 		}
-		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || ace.Mask&windows.GENERIC_ALL == 0 {
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || !windowsFileMaskHasFullControl(ace.Mask) {
 			t.Fatalf("ACE %d type/mask = %d/%#x", index, ace.Header.AceType, ace.Mask)
 		}
 		flags := uint32(ace.Header.AceFlags)
