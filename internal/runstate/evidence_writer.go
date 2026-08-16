@@ -122,7 +122,7 @@ func newEvidenceWriter(repository, taskID string, hooks verifyHooks) (*evidenceW
 		return writer, nil
 	}
 	_ = parent.Close()
-	return nil, &IdentityError{message: "Could not allocate a unique verification run id."}
+	return nil, &RepositoryError{message: "Could not allocate a unique verification Run id after 100 collisions."}
 }
 
 func ensureRealDirectory(root *os.Root, path string, mode fs.FileMode) error {
