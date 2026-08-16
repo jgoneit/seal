@@ -21,16 +21,20 @@ The architecture keeps execution outside Seal:
 ## Migration status
 
 This repository is an **experimental Go successor candidate**. The canonical
-behavioral reference remains [Seal Legacy](https://github.com/jgoneit/seal-legacy),
-the preserved Python implementation.
+behavioral reference for Task, Evidence, manifest, source, Scope, and check
+meanings remains [Seal Legacy](https://github.com/jgoneit/seal-legacy), the
+preserved Python implementation. The Basic-only verifier policy and immutable
+v2 Completion record are the explicit Go v1 canonical transition documented in
+`MIGRATION_CHARTER.md`.
 
 The canonical implementation has not switched to Go. This repository does not
 translate the Python package structure. Its current compatibility surface
 creates normalized Task snapshots, records manifest-valid Evidence for one
 explicit Task, and provides exact-identity queries for stored Tasks and Runs
 under `.seal`. It also evaluates one explicit Run against current source under
-the approved Go v1 Basic Completion policy. The Python reference remains
-canonical for the compatibility meanings identified in `REFERENCE.md`.
+the approved Go v1 Basic Completion policy. `REFERENCE.md` identifies which
+meanings remain frozen-Reference compatibility targets and which Completion
+decisions moved to the Go v1 contract.
 
 ## Current CLI
 

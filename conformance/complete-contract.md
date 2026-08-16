@@ -223,12 +223,15 @@ No-clobber publication protects an existing record from Complete itself. It
 does not make the repository immutable against another process running as the
 same operating-system user.
 
-Publication uses the platform's native no-replace rename primitive on supported
-local Linux, macOS, and Windows filesystems. The contract does not claim atomic
-rename or crash-durability guarantees for network filesystems, FUSE, or other
-filesystems whose semantics differ from ordinary local POSIX filesystems or
-NTFS. Platform support is gated by native CI rather than cross-compilation
-alone.
+The implementation contains native no-replace publication primitives targeting
+ordinary local Linux, macOS, and Windows filesystems. A platform is not claimed
+as release-supported until its native CI gate passes; cross-compilation alone
+is insufficient. Atomic visibility is not a crash-durability claim. POSIX
+targets synchronize the staged file and directory before publication, Windows
+synchronizes the staged file but does not provide directory sync here, and the
+post-publication directory sync is best-effort. No atomic-rename or durability
+guarantee is claimed for network filesystems, FUSE, or filesystems whose
+semantics differ from ordinary local POSIX filesystems or NTFS.
 
 ## Explicit exclusions
 
