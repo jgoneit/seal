@@ -54,6 +54,15 @@ func TestRunCLIInformationalCommands(t *testing.T) {
 	}
 }
 
+func TestHelpUsesReleaseNeutralVersionDescription(t *testing.T) {
+	if !strings.Contains(help, "--version           Print the Seal version.") {
+		t.Fatalf("help does not contain release-neutral version text: %q", help)
+	}
+	if strings.Contains(help, "development version") {
+		t.Fatalf("help still labels every build as a development version: %q", help)
+	}
+}
+
 func TestMainInformationalCommandsIgnoreDeletedWorkingDirectory(t *testing.T) {
 	// Frozen Reference 94bb931 handles exact informational flags before any
 	// repository or working-directory lookup; normal and deleted cwd output is
