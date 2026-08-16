@@ -17,15 +17,27 @@ const help = `Seal exposes deterministic Acceptance state.
 Usage:
   seal --help
   seal --version
+  seal task create --file <TASK_JSON> [--force]
   seal task show <TASK_ID>
   seal run show <TASK_ID> --run-id <RUN_ID>
 
 Options:
-  --help     Show this help text.
-  --version  Print the development version.
+  --file <TASK_JSON>  Read a Task Spec from this file.
+  --force             Replace the exact existing Task snapshot.
+  --help              Show this help text.
+  --version           Print the development version.
 
+Task creation validates and stores one normalized Task snapshot.
 The Task and Run queries are exact-identity, read-only compatibility commands.
-Task creation, verification, completion, and latest-id selection are unsupported.
+Verification, completion, and latest-id selection are unsupported.
+`
+
+const taskCreateHelp = `usage: seal task create [-h] --file FILE [--force]
+
+options:
+  -h, --help   show this help message and exit
+  --file FILE  path to a Task Spec JSON file
+  --force      replace an existing Task snapshot
 `
 
 func main() {
@@ -47,7 +59,10 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 }
 
 func isInformationalCommand(args []string) bool {
-	return len(args) == 1 && (args[0] == "--help" || args[0] == "--version")
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "--version") {
+		return true
+	}
+	return taskCreateHelpRequested(args)
 }
 
 func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
@@ -61,9 +76,20 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 			return 0
 		}
 	}
+	if taskCreateHelpRequested(args) {
+		fmt.Fprint(stdout, taskCreateHelp)
+		return 0
+	}
 
 	if len(args) == 3 && args[0] == "task" && args[1] == "show" {
 		return showTask(cwd, args[2], stdout, stderr)
+	}
+	if len(args) >= 2 && args[0] == "task" && args[1] == "create" {
+		taskFile, force, err := parseTaskCreate(args[2:])
+		if err != nil {
+			return commandUsage(stderr, err.Error())
+		}
+		return createTask(cwd, taskFile, force, stdout, stderr)
 	}
 	if len(args) >= 2 && args[0] == "run" && args[1] == "show" {
 		taskID, runID, err := parseRunShow(args[2:])
@@ -73,7 +99,23 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 		return showRun(cwd, taskID, runID, stdout, stderr)
 	}
 
-	return commandUsage(stderr, "expected --help, --version, task show, or run show")
+	return commandUsage(stderr, "expected --help, --version, task create, task show, or run show")
+}
+
+func createTask(cwd, taskFile string, force bool, stdout, stderr io.Writer) int {
+	encoded, err := taskstate.Create(cwd, taskFile, force)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		if kind, ok := taskstate.KindOf(err); ok && kind == taskstate.Repository {
+			return 3
+		}
+		return 2
+	}
+	if _, err := stdout.Write(encoded); err != nil {
+		fmt.Fprintf(stderr, "error: could not write Task output: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func showTask(cwd, taskID string, stdout, stderr io.Writer) int {
@@ -166,9 +208,62 @@ func parseRunShow(args []string) (string, string, error) {
 	return taskID, runID, nil
 }
 
+func parseTaskCreate(args []string) (string, bool, error) {
+	var taskFile string
+	fileSeen := false
+	force := false
+	for index := 0; index < len(args); index++ {
+		argument := args[index]
+		switch {
+		case argument == "--file":
+			if index+1 >= len(args) || (strings.HasPrefix(args[index+1], "-") && args[index+1] != "-") {
+				return "", false, fmt.Errorf("task create requires --file <TASK_JSON>")
+			}
+			index++
+			taskFile = args[index]
+			fileSeen = true
+		case strings.HasPrefix(argument, "--file="):
+			taskFile = strings.TrimPrefix(argument, "--file=")
+			fileSeen = true
+		case argument == "--force":
+			force = true
+		case strings.HasPrefix(argument, "-"):
+			return "", false, fmt.Errorf("task create received an unsupported option %q", argument)
+		default:
+			return "", false, fmt.Errorf("task create does not accept positional argument %q", argument)
+		}
+	}
+	if !fileSeen {
+		return "", false, fmt.Errorf("task create requires --file <TASK_JSON>")
+	}
+	return taskFile, force, nil
+}
+
+func taskCreateHelpRequested(args []string) bool {
+	if len(args) < 3 || args[0] != "task" || args[1] != "create" {
+		return false
+	}
+	for index := 2; index < len(args); index++ {
+		argument := args[index]
+		switch {
+		case argument == "--file":
+			if index+1 >= len(args) || (strings.HasPrefix(args[index+1], "-") && args[index+1] != "-") {
+				return false
+			}
+			index++
+		case strings.HasPrefix(argument, "--file="):
+			continue
+		case argument == "--help" || argument == "-h":
+			return true
+		}
+	}
+	return false
+}
+
 func commandUsage(stderr io.Writer, detail string) int {
 	fmt.Fprintf(stderr, "error: %s\n", detail)
-	fmt.Fprintln(stderr, "usage: seal task show <TASK_ID>")
+	fmt.Fprintln(stderr, "usage: seal task create --file <TASK_JSON> [--force]")
+	fmt.Fprintln(stderr, "       seal task show <TASK_ID>")
 	fmt.Fprintln(stderr, "       seal run show <TASK_ID> --run-id <RUN_ID>")
 	return 2
 }

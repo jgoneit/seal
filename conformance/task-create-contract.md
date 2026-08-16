@@ -71,6 +71,9 @@ The contract is:
 The imported `contracts/task.schema.json` records this input shape, but a
 Draft 2020-12 validator alone is not exact: the Schema considers numerically
 integral JSON values such as `1.0` integers, while the Reference rejects them.
+Its regular expressions also accept a trailing newline in an otherwise valid
+Task id and do not reject non-letter drive-like Scope prefixes such as `1:`;
+the frozen runtime validator rejects both.
 The saved snapshot also contains `baseline`, which is intentionally absent
 from the input Schema.
 
@@ -175,13 +178,42 @@ catalog reads, or Evidence symlink semantics.
 
 Go prepares the complete snapshot bytes before any write, uses a same-directory
 temporary regular file with deterministic permissions, and publishes it
-atomically. A failed create leaves an existing destination unchanged and
-removes temporary residue. No-force publication must not overwrite a winner in
-a race; force may replace only the exact target Task.
+atomically. Under ordinary supported filesystem operations, a failed create
+leaves an existing destination unchanged and removes temporary residue.
+No-force publication must not overwrite a winner in a race; force may replace
+only the exact target Task.
+
+The implementation uses a same-directory hard link for no-force, followed by
+removal of the temporary name, and a same-directory rename for force. This was
+validated on macOS/APFS. A filesystem without hard-link support cannot provide
+the implemented no-clobber publication path, and identical force-replacement
+semantics are not claimed for every non-POSIX platform.
+
+The static symlink rejection is validated for a stable filesystem layout.
+`os.Root` confines ordinary symlink resolution to the repository, but its
+component opens follow repository-internal symlinks and do not prohibit bind
+mounts. A hostile concurrent ancestor swap can therefore redirect publication
+within the repository even though it cannot use the tested ordinary symlink
+escape to write outside. Race-proof no-follow component opens would require
+platform-specific primitives beyond this standard-library slice.
+
+There is one post-publication filesystem-fault window that is not transactional:
+if the no-force hard link succeeds but every attempt to remove the temporary
+name fails, the complete destination already exists and temporary residue may
+remain after the command reports success. Link creation is therefore the
+no-force commit point; reporting failure afterward would falsely claim that no
+Task was created, while removing the destination to roll back could delete a
+concurrent force replacement. Normal, duplicate, validation, and
+pre-publication failure paths do not use this exception; the residual is
+reported rather than hidden behind a generic transaction abstraction.
+An independent failure of temporary-name cleanup can likewise leave residue
+after a pre-publication failure, although the destination remains unchanged.
+This double-fault path is best-effort cleanup rather than a transactional
+guarantee and was not fault-injected in this slice.
 
 ## Blocked Reference edge cases
 
-Two newly observed cases combine incompatible requirements and are not claimed
+Five newly observed cases combine incompatible requirements and are not claimed
 as exact parity in this slice:
 
 - A JSON string containing an unpaired UTF-16 surrogate passes the frozen
@@ -219,6 +251,12 @@ The Reference's modes are umask-dependent (`0755`/`0644` under umask `022` and
 modes to reproduce. This slice fixes newly created Task directories at `0755`
 and snapshots at `0644`, the common Reference result under umask `022`, and
 records that choice as writer hardening rather than exact byte metadata parity.
+
+The current Go candidate fails closed with handled exit 2 for the blocked
+encoding, integer-limit, surrogate, and input/catalog alias cases. Those
+outcomes preserve the requested no-partial-write and input/catalog immutability
+properties, but they are excluded from the exact Reference-parity count until a
+canonical transition decides their public classification.
 
 ## Write set and exclusions
 

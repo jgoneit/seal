@@ -29,6 +29,9 @@ func TestRunCLIInformationalCommands(t *testing.T) {
 	}{
 		{name: "help", args: []string{"--help"}, wantOutput: help},
 		{name: "version", args: []string{"--version"}, wantOutput: version + "\n"},
+		{name: "task create long help", args: []string{"task", "create", "--help"}, wantOutput: taskCreateHelp},
+		{name: "task create short help", args: []string{"task", "create", "-h"}, wantOutput: taskCreateHelp},
+		{name: "task create help after options", args: []string{"task", "create", "--force", "--file=input.json", "--help"}, wantOutput: taskCreateHelp},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -56,16 +59,18 @@ func TestMainInformationalCommandsIgnoreDeletedWorkingDirectory(t *testing.T) {
 	}
 	tests := []struct {
 		name       string
-		argument   string
+		args       []string
 		wantOutput string
 	}{
-		{name: "help", argument: "--help", wantOutput: help},
-		{name: "version", argument: "--version", wantOutput: version + "\n"},
+		{name: "help", args: []string{"--help"}, wantOutput: help},
+		{name: "version", args: []string{"--version"}, wantOutput: version + "\n"},
+		{name: "task create long help", args: []string{"task", "create", "--help"}, wantOutput: taskCreateHelp},
+		{name: "task create short help", args: []string{"task", "create", "-h"}, wantOutput: taskCreateHelp},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			normal := runMainSubprocess(t, false, test.argument)
-			deleted := runMainSubprocess(t, true, test.argument)
+			normal := runMainSubprocess(t, false, test.args...)
+			deleted := runMainSubprocess(t, true, test.args...)
 			for mode, result := range map[string]mainSubprocessResult{"normal": normal, "deleted": deleted} {
 				if result.code != 0 {
 					t.Fatalf("%s cwd exit code = %d, stderr = %q", mode, result.code, result.stderr)
@@ -123,7 +128,8 @@ func TestMainStateCommandsApplyApprovedDeletedCWDRepositoryFailureWithoutWrites(
 			args:     []string{"run", "show", "TASK-001"},
 			wantCode: 2,
 			wantStderr: "error: run show requires --run-id <RUN_ID>\n" +
-				"usage: seal task show <TASK_ID>\n" +
+				"usage: seal task create --file <TASK_JSON> [--force]\n" +
+				"       seal task show <TASK_ID>\n" +
 				"       seal run show <TASK_ID> --run-id <RUN_ID>\n",
 		},
 	}

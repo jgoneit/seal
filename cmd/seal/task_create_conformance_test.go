@@ -136,6 +136,34 @@ func TestTaskCreateContractNormalizesSupportedInputs(t *testing.T) {
 			},
 			wantVerifier: map[string]any{"required": false},
 		},
+		{
+			name: "timeout accepts the frozen 4300 digit integer boundary",
+			catalog: map[string]any{
+				"schema_version": 1,
+				"checks":         []any{},
+			},
+			spec: func() map[string]any {
+				spec := createContractValidSpec()
+				spec["checks"] = []any{
+					map[string]any{
+						"name":            "large-timeout",
+						"argv":            []any{"true"},
+						"required":        true,
+						"timeout_seconds": json.Number(strings.Repeat("9", 4300)),
+					},
+				}
+				return spec
+			}(),
+			wantChecks: []any{
+				map[string]any{
+					"name":            "large-timeout",
+					"argv":            []any{"true"},
+					"required":        true,
+					"timeout_seconds": json.Number(strings.Repeat("9", 4300)),
+				},
+			},
+			wantVerifier: map[string]any{"required": false},
+		},
 	}
 
 	for _, test := range tests {
@@ -212,6 +240,20 @@ func TestTaskCreateContractPreservesUnicodeNormalizationAndOrdering(t *testing.T
 	}
 }
 
+func TestTaskCreateContractSupportsFilesystemValidLongTaskID(t *testing.T) {
+	fixture := createContractNewFixture(t, true)
+	taskID := "T" + strings.Repeat("A", 219)
+	spec := createContractValidSpec()
+	spec["id"] = taskID
+	createContractWriteJSON(t, fixture.input, spec)
+
+	result := createContractRun(t, fixture.repository, "task", "create", "--file", fixture.input)
+	want := createContractExpectedBaseSnapshot(createContractGit(t, fixture.repository, "rev-parse", "HEAD"))
+	want["id"] = taskID
+	createContractAssertSuccess(t, fixture.repository, taskID, result, want)
+	createContractAssertTaskDirectory(t, fixture.repository, taskID)
+}
+
 func TestTaskCreateContractRepositoryAndInputBoundaries(t *testing.T) {
 	t.Run("dirty repository and outside input are accepted without mutation", func(t *testing.T) {
 		fixture := createContractNewFixture(t, true)
@@ -256,6 +298,36 @@ func TestTaskCreateContractRepositoryAndInputBoundaries(t *testing.T) {
 			result,
 			createContractExpectedBaseSnapshot(createContractGit(t, fixture.repository, "rev-parse", "HEAD")),
 		)
+	})
+
+	t.Run("ordinary external input and catalog symlinks remain readable", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		outside := t.TempDir()
+		externalInput := filepath.Join(outside, "task.json")
+		externalCatalog := filepath.Join(outside, "checks.json")
+		createContractWriteJSON(t, externalInput, createContractValidSpec())
+		createContractWriteJSON(t, externalCatalog, createContractValidCatalog())
+		if err := os.Remove(fixture.input); err != nil {
+			t.Fatalf("Remove input: %v", err)
+		}
+		if err := os.Remove(createContractCatalogPath(fixture.repository)); err != nil {
+			t.Fatalf("Remove catalog: %v", err)
+		}
+		createContractSymlink(t, externalInput, fixture.input)
+		createContractSymlink(t, externalCatalog, createContractCatalogPath(fixture.repository))
+		inputBefore := createContractReadFile(t, externalInput)
+		catalogBefore := createContractReadFile(t, externalCatalog)
+
+		result := createContractRun(t, fixture.repository, "task", "create", "--file", fixture.input)
+		createContractAssertSuccess(
+			t,
+			fixture.repository,
+			createContractTaskID,
+			result,
+			createContractExpectedBaseSnapshot(createContractGit(t, fixture.repository, "rev-parse", "HEAD")),
+		)
+		createContractRequireBytesEqual(t, externalInput, inputBefore)
+		createContractRequireBytesEqual(t, externalCatalog, catalogBefore)
 	})
 }
 
@@ -327,6 +399,7 @@ func TestTaskCreateContractRejectsInvalidTaskFieldsWithoutWrites(t *testing.T) {
 		{name: "id empty", mutate: func(spec map[string]any) { spec["id"] = "" }, wantMessage: "Task id must be a non-empty string."},
 		{name: "id invalid first character", mutate: func(spec map[string]any) { spec["id"] = "_TASK" }, wantMessage: "Task id must begin with an alphanumeric character and contain only letters, numbers, underscores, or hyphens."},
 		{name: "id non-ASCII", mutate: func(spec map[string]any) { spec["id"] = "TASK-한글" }, wantMessage: "Task id must contain only letters, numbers, underscores, or hyphens."},
+		{name: "id trailing newline accepted by Schema but rejected by Reference", mutate: func(spec map[string]any) { spec["id"] = "TASK\n" }, wantMessage: "Task id must contain only letters, numbers, underscores, or hyphens."},
 		{name: "type invalid", mutate: func(spec map[string]any) { spec["type"] = "maintenance" }, wantMessage: "Task Spec type must be one of: bugfix, config-infra, docs, feature, refactor, test."},
 		{name: "objective non-string", mutate: func(spec map[string]any) { spec["objective"] = false }, wantMessage: "Task Spec objective must be a non-empty string."},
 		{name: "objective empty", mutate: func(spec map[string]any) { spec["objective"] = "" }, wantMessage: "Task Spec objective must be a non-empty string."},
@@ -336,6 +409,7 @@ func TestTaskCreateContractRejectsInvalidTaskFieldsWithoutWrites(t *testing.T) {
 		{name: "scope item empty", mutate: func(spec map[string]any) { spec["scope"] = []any{""} }, wantMessage: "Task Spec scope[0] must be a non-empty string."},
 		{name: "scope POSIX absolute", mutate: func(spec map[string]any) { spec["scope"] = []any{"/tmp/outside"} }, wantMessage: "Task Spec scope[0] must be relative to the repository root."},
 		{name: "scope Windows drive", mutate: func(spec map[string]any) { spec["scope"] = []any{`C:\outside`} }, wantMessage: "Task Spec scope[0] must be relative to the repository root."},
+		{name: "scope non-letter Windows drive accepted by Schema but rejected by Reference", mutate: func(spec map[string]any) { spec["scope"] = []any{"1:outside"} }, wantMessage: "Task Spec scope[0] must be relative to the repository root."},
 		{name: "scope traversal", mutate: func(spec map[string]any) { spec["scope"] = []any{"src/../outside"} }, wantMessage: "Task Spec scope[0] must not contain '..' traversal."},
 		{name: "checks non-array", mutate: func(spec map[string]any) { spec["checks"] = "unit" }, wantMessage: "Task Spec checks must be a non-empty array."},
 		{name: "checks empty", mutate: func(spec map[string]any) { spec["checks"] = []any{} }, wantMessage: "Task Spec checks must be a non-empty array."},
@@ -453,6 +527,25 @@ func TestTaskCreateContractFailurePrecedence(t *testing.T) {
 		missing := filepath.Join(cwd, "missing.json")
 		result := createContractRun(t, cwd, "task", "create", "--file", missing)
 		createContractAssertExactError(t, result, 3, "Task commands must run inside a Git repository.")
+	})
+
+	t.Run("repository resolution precedes empty input path", func(t *testing.T) {
+		cwd := t.TempDir()
+		result := createContractRun(t, cwd, "task", "create", "--file=")
+		createContractAssertExactError(t, result, 3, "Task commands must run inside a Git repository.")
+	})
+
+	t.Run("empty input path is a handled input error inside repository", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		before := createContractSnapshotTree(t, fixture.repository)
+		result := createContractRun(t, fixture.repository, "task", "create", "--file=")
+		createContractAssertHandledError(t, result, 2)
+		if strings.Contains(result.stderr, "usage:") {
+			t.Fatalf("empty input path was rejected by CLI parsing: %q", result.stderr)
+		}
+		if after := createContractSnapshotTree(t, fixture.repository); !reflect.DeepEqual(after, before) {
+			t.Fatalf("empty input failure changed repository\nbefore: %#v\nafter: %#v", before, after)
+		}
 	})
 
 	t.Run("input read precedes catalog validation", func(t *testing.T) {
@@ -737,12 +830,129 @@ func TestTaskCreateContractCLIShape(t *testing.T) {
 	}
 }
 
-func TestTaskCreateContractBlockedReferenceAliasAndLoneSurrogate(t *testing.T) {
+func TestTaskCreateContractAcceptedCLIForms(t *testing.T) {
+	tests := []struct {
+		name      string
+		arguments func(createContractFixture) []string
+	}{
+		{
+			name: "file option with equals",
+			arguments: func(fixture createContractFixture) []string {
+				return []string{"task", "create", "--file=" + fixture.input}
+			},
+		},
+		{
+			name: "force before file option",
+			arguments: func(fixture createContractFixture) []string {
+				return []string{"task", "create", "--force", "--file", fixture.input}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := createContractNewFixture(t, true)
+			result := createContractRun(t, fixture.repository, test.arguments(fixture)...)
+			createContractAssertSuccess(
+				t,
+				fixture.repository,
+				createContractTaskID,
+				result,
+				createContractExpectedBaseSnapshot(createContractGit(t, fixture.repository, "rev-parse", "HEAD")),
+			)
+		})
+	}
+}
+
+func TestTaskCreateContractBlockedReferenceEdges(t *testing.T) {
+	t.Run("invalid UTF-8 input or catalog", func(t *testing.T) {
+		t.Skip("blocked exit-class conflict: frozen decoding escapes as exit 1, while G2 classifies malformed input and catalog data as exit 2")
+	})
+	t.Run("4301-digit integer token", func(t *testing.T) {
+		t.Skip("blocked exit-class conflict: frozen CPython conversion escapes as exit 1, while G2 otherwise names only exits 0, 2, and 3")
+	})
 	t.Run("input aliases destination", func(t *testing.T) {
 		t.Skip("blocked contract conflict: frozen --force mutates an input file that aliases the destination, while G2 requires input immutability")
 	})
+	t.Run("catalog aliases destination", func(t *testing.T) {
+		t.Skip("blocked contract conflict: frozen --force mutates a catalog target that aliases the destination, while G2 requires catalog immutability")
+	})
 	t.Run("lone surrogate rendering", func(t *testing.T) {
 		t.Skip("blocked contract conflict: frozen rendering exits 1 after leaving a zero-byte destination, while G2 requires atomic failure with the destination unchanged")
+	})
+}
+
+func TestTaskCreateCandidateBlockedEdgesFailClosedWithoutWrites(t *testing.T) {
+	assertRejectedUnchanged := func(t *testing.T, fixture createContractFixture, arguments ...string) {
+		t.Helper()
+		before := createContractSnapshotTree(t, fixture.repository)
+		result := createContractInvoke(fixture.repository, arguments...)
+		createContractAssertHandledError(t, result, 2)
+		if after := createContractSnapshotTree(t, fixture.repository); !reflect.DeepEqual(after, before) {
+			t.Fatalf("blocked-edge rejection changed repository\nbefore: %#v\nafter:  %#v", before, after)
+		}
+	}
+
+	t.Run("invalid UTF-8 input", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		createContractWriteRaw(t, fixture.input, []byte{0xff})
+		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+	})
+
+	t.Run("invalid UTF-8 catalog", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		createContractWriteRaw(t, createContractCatalogPath(fixture.repository), []byte{0xff})
+		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+	})
+
+	t.Run("4301-digit integer token", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		spec := createContractValidSpec()
+		spec["checks"] = []any{map[string]any{
+			"name":            "large",
+			"argv":            []any{"true"},
+			"required":        true,
+			"timeout_seconds": json.Number(strings.Repeat("9", 4301)),
+		}}
+		createContractWriteJSON(t, fixture.input, spec)
+		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
+	})
+
+	t.Run("input aliases destination", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		destination := createContractTaskPath(fixture.repository, createContractTaskID)
+		createContractWriteJSON(t, destination, createContractValidSpec())
+		assertRejectedUnchanged(t, fixture, "task", "create", "--file", destination, "--force")
+	})
+
+	t.Run("catalog aliases destination", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		destination := createContractTaskPath(fixture.repository, createContractTaskID)
+		createContractWriteJSON(t, destination, map[string]any{"checks": []any{}})
+		if err := os.Remove(createContractCatalogPath(fixture.repository)); err != nil {
+			t.Fatalf("Remove catalog: %v", err)
+		}
+		createContractSymlink(
+			t,
+			filepath.Join("tasks", createContractTaskID+".json"),
+			createContractCatalogPath(fixture.repository),
+		)
+		spec := createContractValidSpec()
+		spec["checks"] = []any{createContractCheck("inline")}
+		createContractWriteJSON(t, fixture.input, spec)
+		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input, "--force")
+	})
+
+	t.Run("lone surrogate rendering", func(t *testing.T) {
+		fixture := createContractNewFixture(t, true)
+		contents := createContractReferenceJSON(t, createContractValidSpec())
+		contents = bytes.Replace(
+			contents,
+			[]byte("Create one deterministic Task snapshot."),
+			[]byte(`before\ud800after`),
+			1,
+		)
+		createContractWriteRaw(t, fixture.input, contents)
+		assertRejectedUnchanged(t, fixture, "task", "create", "--file", fixture.input)
 	})
 }
 
@@ -753,6 +963,9 @@ func createContractNewFixture(t *testing.T, withHead bool) createContractFixture
 		t.Fatalf("MkdirAll(%q): %v", repository, err)
 	}
 	createContractGit(t, repository, "init", "--quiet")
+	createContractGit(t, repository, "config", "maintenance.auto", "false")
+	createContractGit(t, repository, "config", "maintenance.autoDetach", "false")
+	createContractGit(t, repository, "config", "gc.auto", "0")
 	if withHead {
 		createContractWriteRaw(t, filepath.Join(repository, "README.md"), []byte("fixture\n"))
 		createContractGit(t, repository, "add", "README.md")
