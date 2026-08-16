@@ -136,6 +136,30 @@ func TestParseVerifyRequiresOnePositionalIdentity(t *testing.T) {
 	}
 }
 
+func TestRunCLIVerifyTreatsHelpAfterTerminatorAsPositional(t *testing.T) {
+	tests := [][]string{
+		{"verify", "--", "--help"},
+		{"verify", "--", "-h"},
+		{"verify", "TASK-1", "--", "--help"},
+		{"verify", "TASK-1", "--", "-h"},
+	}
+	for _, args := range tests {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			if code := runCLI(t.TempDir(), args, &stdout, &stderr); code != 2 {
+				t.Fatalf("runCLI(%q) code = %d, stderr = %q; want 2", args, code, stderr.String())
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("runCLI(%q) stdout = %q; want empty", args, stdout.String())
+			}
+			if stderr.Len() == 0 {
+				t.Fatalf("runCLI(%q) stderr = %q; want positional error", args, stderr.String())
+			}
+		})
+	}
+}
+
 type failingOutput struct{}
 
 func (failingOutput) Write([]byte) (int, error) {

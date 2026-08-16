@@ -336,6 +336,9 @@ func verifyHelpRequested(args []string) bool {
 		return false
 	}
 	for _, argument := range args[1:] {
+		if argument == "--" {
+			return false
+		}
 		if argument == "--help" || argument == "-h" {
 			return true
 		}
