@@ -1,6 +1,6 @@
-// Package runstate validates and projects one explicitly identified stored
-// Acceptance Run. It is read-only and deliberately has no lifecycle or Git
-// execution responsibilities.
+// Package runstate creates, validates, and projects explicitly identified
+// Acceptance Runs. It never infers a latest identity, repairs work, or invokes
+// another Toolkit module.
 package runstate
 
 import (
@@ -240,6 +240,16 @@ func ValidateRun(cwd, taskID, runID string) (*ValidatedRun, error) {
 	if err != nil {
 		return nil, err
 	}
+	return validateRunAt(repository, task, taskID, runID, runDirectory)
+}
+
+func validateRunAt(
+	repository string,
+	task jsonObject,
+	taskID string,
+	runID string,
+	runDirectory string,
+) (*ValidatedRun, error) {
 	documents, err := validateDocuments(runDirectory, task, taskID, runID)
 	if err != nil {
 		return nil, err

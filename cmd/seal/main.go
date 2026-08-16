@@ -19,6 +19,7 @@ Usage:
   seal --version
   seal task create --file <TASK_JSON> [--force]
   seal task show <TASK_ID>
+  seal verify <TASK_ID>
   seal run show <TASK_ID> --run-id <RUN_ID>
 
 Options:
@@ -28,8 +29,9 @@ Options:
   --version           Print the development version.
 
 Task creation validates and stores one normalized Task snapshot.
+Verification records one exact-identity, manifest-valid Evidence Run.
 The Task and Run queries are exact-identity, read-only compatibility commands.
-Verification, completion, and latest-id selection are unsupported.
+Completion and latest-id selection are unsupported.
 `
 
 const taskCreateHelp = `usage: seal task create [-h] --file FILE [--force]
@@ -38,6 +40,15 @@ options:
   -h, --help   show this help message and exit
   --file FILE  path to a Task Spec JSON file
   --force      replace an existing Task snapshot
+`
+
+const verifyHelp = `usage: seal verify [-h] TASK_ID
+
+positional arguments:
+  TASK_ID
+
+options:
+  -h, --help  show this help message and exit
 `
 
 func main() {
@@ -62,7 +73,7 @@ func isInformationalCommand(args []string) bool {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "--version") {
 		return true
 	}
-	return taskCreateHelpRequested(args)
+	return taskCreateHelpRequested(args) || verifyHelpRequested(args)
 }
 
 func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
@@ -80,6 +91,10 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, taskCreateHelp)
 		return 0
 	}
+	if verifyHelpRequested(args) {
+		fmt.Fprint(stdout, verifyHelp)
+		return 0
+	}
 
 	if len(args) == 3 && args[0] == "task" && args[1] == "show" {
 		return showTask(cwd, args[2], stdout, stderr)
@@ -91,6 +106,13 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 		}
 		return createTask(cwd, taskFile, force, stdout, stderr)
 	}
+	if len(args) >= 1 && args[0] == "verify" {
+		taskID, err := parseVerify(args[1:])
+		if err != nil {
+			return commandUsage(stderr, err.Error())
+		}
+		return verifyTask(cwd, taskID, stdout, stderr)
+	}
 	if len(args) >= 2 && args[0] == "run" && args[1] == "show" {
 		taskID, runID, err := parseRunShow(args[2:])
 		if err != nil {
@@ -99,7 +121,32 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 		return showRun(cwd, taskID, runID, stdout, stderr)
 	}
 
-	return commandUsage(stderr, "expected --help, --version, task create, task show, or run show")
+	return commandUsage(stderr, "expected --help, --version, task create, task show, verify, or run show")
+}
+
+func verifyTask(cwd, taskID string, stdout, stderr io.Writer) int {
+	run, err := runstate.Verify(cwd, taskID)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		switch runstate.KindOf(err) {
+		case runstate.KindRuntime:
+			return 1
+		case runstate.KindRepository:
+			return 3
+		default:
+			return 2
+		}
+	}
+	encoded, err := run.ReferenceJSON()
+	if err != nil {
+		fmt.Fprintf(stderr, "error: could not render verification output: %v\n", err)
+		return 1
+	}
+	if _, err := stdout.Write(encoded); err != nil {
+		fmt.Fprintf(stderr, "error: could not write verification output: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func createTask(cwd, taskFile string, force bool, stdout, stderr io.Writer) int {
@@ -213,6 +260,25 @@ func parseRunShow(args []string) (string, string, error) {
 	return taskID, runID, nil
 }
 
+func parseVerify(args []string) (string, error) {
+	positional := make([]string, 0, len(args))
+	optionParsing := true
+	for _, argument := range args {
+		if optionParsing && argument == "--" {
+			optionParsing = false
+			continue
+		}
+		if optionParsing && strings.HasPrefix(argument, "-") {
+			return "", fmt.Errorf("verify received an unsupported option %q", argument)
+		}
+		positional = append(positional, argument)
+	}
+	if len(positional) != 1 {
+		return "", fmt.Errorf("verify requires exactly one <TASK_ID>")
+	}
+	return positional[0], nil
+}
+
 func parseTaskCreate(args []string) (string, bool, error) {
 	var taskFile string
 	fileSeen := false
@@ -265,10 +331,23 @@ func taskCreateHelpRequested(args []string) bool {
 	return false
 }
 
+func verifyHelpRequested(args []string) bool {
+	if len(args) < 2 || args[0] != "verify" {
+		return false
+	}
+	for _, argument := range args[1:] {
+		if argument == "--help" || argument == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
 func commandUsage(stderr io.Writer, detail string) int {
 	fmt.Fprintf(stderr, "error: %s\n", detail)
 	fmt.Fprintln(stderr, "usage: seal task create --file <TASK_JSON> [--force]")
 	fmt.Fprintln(stderr, "       seal task show <TASK_ID>")
+	fmt.Fprintln(stderr, "       seal verify <TASK_ID>")
 	fmt.Fprintln(stderr, "       seal run show <TASK_ID> --run-id <RUN_ID>")
 	return 2
 }
