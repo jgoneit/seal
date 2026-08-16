@@ -11,8 +11,27 @@ permissions:
 
 jobs:
   go:
-    name: Go
-    runs-on: ubuntu-latest
+    name: Go (${{ matrix.goos }}/${{ matrix.goarch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+          - runner: macos-15
+            goos: darwin
+            goarch: arm64
+          - runner: windows-2025
+            goos: windows
+            goarch: amd64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -23,7 +42,36 @@ jobs:
           go-version: "1.26.6"
           cache: false
 
+      - name: Assert native target
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          actual_goos="$(go env GOOS)"
+          actual_goarch="$(go env GOARCH)"
+          if [[ "${actual_goos}" != "${{ matrix.goos }}" ]]; then
+            printf 'GOOS mismatch: got %s, want %s\n' "${actual_goos}" "${{ matrix.goos }}" >&2
+            exit 1
+          fi
+          if [[ "${actual_goarch}" != "${{ matrix.goarch }}" ]]; then
+            printf 'GOARCH mismatch: got %s, want %s\n' "${actual_goarch}" "${{ matrix.goarch }}" >&2
+            exit 1
+          fi
+
+      - name: Assert native target
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $actualGoos = go env GOOS
+          $actualGoarch = go env GOARCH
+          if ($actualGoos -ne '${{ matrix.goos }}') {
+            throw "GOOS mismatch: got $actualGoos, want ${{ matrix.goos }}"
+          }
+          if ($actualGoarch -ne '${{ matrix.goarch }}') {
+            throw "GOARCH mismatch: got $actualGoarch, want ${{ matrix.goarch }}"
+          }
+
       - name: Check formatting
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           unformatted="$(gofmt -l .)"
@@ -32,15 +80,48 @@ jobs:
             exit 1
           fi
 
-      - name: Test
+      - name: Check formatting
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $unformatted = @(gofmt -l .)
+          if ($unformatted.Count -ne 0) {
+            $unformatted
+            exit 1
+          }
+
+      - name: Verify modules
+        run: go mod verify
+
+      - name: Run unit and integration tests
         run: go test ./...
+
+      - name: Run process-tree tests
+        run: go test -count=1 ./internal/checkrun -run '^(TestTimeoutTerminatesProcessTree|TestSuccessfulParentCleansBackgroundDescendant)$'
+
+      - name: Run race tests
+        run: go test -race ./...
 
       - name: Vet
         run: go vet ./...
 
       - name: Build and smoke-test CLI
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          go build -o "${RUNNER_TEMP}/seal" ./cmd/seal
-          "${RUNNER_TEMP}/seal" --help
-          "${RUNNER_TEMP}/seal" --version
+          binary="${RUNNER_TEMP}/seal"
+          go build -o "${binary}" ./cmd/seal
+          "${binary}" --help
+          "${binary}" --version
+
+      - name: Build and smoke-test CLI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Join-Path $env:RUNNER_TEMP 'seal.exe'
+          go build -o $binary ./cmd/seal
+          & $binary --help
+          & $binary --version
+
+      - name: Check whitespace errors
+        run: git diff --check
