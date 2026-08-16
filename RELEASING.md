@@ -84,3 +84,10 @@ This variable exists only for deterministic installer tests; it is not a
 supported alternate distribution channel. Tests isolate the ordinary `HOME`
 or `LOCALAPPDATA` environment. There is no destination override: the fixed
 targets are `$HOME/.local/bin` and `$LOCALAPPDATA\Programs\Seal\bin`.
+
+Both installers retain rollback authority until the absolute installed path
+passes its version smoke. Windows binds the replacement and backup to their
+SHA-256 identities and retries only a narrow set of file-lock errors while both
+bound names still exist. If that retry budget is exhausted, the installer
+fails and reports the same-directory backup that still contains the prior
+binary; it does not delete that recovery copy.

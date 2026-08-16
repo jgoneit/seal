@@ -147,8 +147,11 @@ The fixed Windows target is
 `$LOCALAPPDATA\Programs\Seal\bin\seal.exe`. Neither installer uses `sudo`,
 edits a shell profile, enables auto-update, installs Git, or makes a Seal
 Acceptance decision. A download, checksum, archive, or version failure leaves
-an existing target unchanged. Releases provide checksums but no signatures or
-attestations.
+an existing target unchanged. If the installed-path smoke fails, the installer
+restores the prior binary or removes a new target before returning. Windows
+retries transient executable locks for a bounded interval; if restoration
+still cannot finish, it preserves the prior bytes in a reported same-directory
+backup. Releases provide checksums but no signatures or attestations.
 
 See [RELEASING.md](RELEASING.md) for the native build and publication contract.
 
