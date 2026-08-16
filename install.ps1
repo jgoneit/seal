@@ -115,7 +115,7 @@ public static class SealNativeSystemInfo
 
 public static class SealNativeFile
 {
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "ReplaceFileW", SetLastError = true)]
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "ReplaceFileW", ExactSpelling = true, SetLastError = true)]
     private static extern bool ReplaceFile(
         string replacedFileName,
         string replacementFileName,
