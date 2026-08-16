@@ -160,7 +160,8 @@ func (store *completionStore) publish(validated *ValidatedRun, contents []byte) 
 		if err != nil || !validCompletionTempName(generated) {
 			return nil, completionEvidenceError("Could not allocate a private completion staging name.", err)
 		}
-		file, err = store.run.OpenFile(generated, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		var createdInfo fs.FileInfo
+		file, createdInfo, err = createPrivateCompletionTemp(store.run, generated)
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}
@@ -168,24 +169,19 @@ func (store *completionStore) publish(validated *ValidatedRun, contents []byte) 
 			return nil, completionEvidenceError("Could not create a private completion staging file.", err)
 		}
 		tempName = generated
+		tempInfo = createdInfo
 		break
 	}
 	if file == nil {
 		return nil, &EvidenceError{message: "Could not allocate a private completion staging file after 100 collisions."}
 	}
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	if tempInfo == nil || !tempInfo.Mode().IsRegular() {
 		_ = file.Close()
-		return nil, completionEvidenceError("Could not bind the private completion staging file identity.", err)
+		return nil, &EvidenceError{message: "Could not bind the private completion staging file identity."}
 	}
-	tempInfo = info
 	if err := store.inject("temp-created"); err != nil {
 		_ = file.Close()
 		return nil, err
-	}
-	if err := file.Chmod(0o600); err != nil {
-		_ = file.Close()
-		return nil, completionEvidenceError("Could not protect the private completion staging file.", err)
 	}
 	if err := store.inject("write"); err != nil {
 		_ = file.Close()

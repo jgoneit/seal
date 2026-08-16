@@ -150,6 +150,13 @@ func completeWithHooks(cwd, taskID, runID string, hooks completeHooks) (*Complet
 		CompletionPath: filepath.Join(validated.runDirectory, "completion.json"),
 	}
 	if existing != nil {
+		currentExisting, err := store.readExisting(validated)
+		if err != nil {
+			return nil, err
+		}
+		if currentExisting == nil || !bytes.Equal(currentExisting, existing) {
+			return nil, &EvidenceError{message: "completion.json changed while current eligibility was being evaluated."}
+		}
 		return result, nil
 	}
 
