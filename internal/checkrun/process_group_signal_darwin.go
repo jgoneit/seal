@@ -21,7 +21,7 @@ func settleProcessGroupSignal(
 	signal syscall.Signal,
 	initialError error,
 ) error {
-	if signal != syscall.SIGKILL {
+	if !isDarwinProcessGroupSettleSignal(signal) {
 		return initialError
 	}
 	return retryDarwinProcessGroupSignal(
@@ -32,6 +32,10 @@ func settleProcessGroupSignal(
 		time.Sleep,
 		syscall.Kill,
 	)
+}
+
+func isDarwinProcessGroupSettleSignal(signal syscall.Signal) bool {
+	return signal == syscall.SIGTERM || signal == syscall.SIGKILL
 }
 
 func retryDarwinProcessGroupSignal(
