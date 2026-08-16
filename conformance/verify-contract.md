@@ -99,9 +99,10 @@ exclusive creation. A mutable reconstructed staging pathname is not used.
 
 The same snapshot collector is used for S0, S1, and later S2. Its digest binds
 the saved baseline and every baseline-relative final product entry, including
-content or symlink-target bytes, add/delete state, executable mode, size, and
-SHA-256. Source identity is independent of whether equivalent final bytes came
-from committed, staged, or unstaged state.
+content or symlink-target bytes, add/delete state, executable mode when exposed
+by POSIX or tracked Git metadata, size, and SHA-256. Source identity is
+independent of whether equivalent final bytes came from committed, staged, or
+unstaged state.
 
 Layered changes preserve committed, staged, unstaged, and nonignored untracked
 records in that order. Rename Scope requires both old and new paths to be in
@@ -111,7 +112,9 @@ product source.
 
 Supported states include ordinary and linked non-bare worktrees, valid or
 detached HEAD, 40- or 64-character object identities, regular and binary files,
-owner-executable files, Git symlinks, gitignore, and ordinary renames.
+owner-executable files, Git symlinks, gitignore, and ordinary renames. Windows
+preserves executable mode for tracked files through the Git index; an untracked
+Windows file has no native POSIX executable bit and is recorded as `100644`.
 
 The collector fails closed for unmerged indexes, active replace refs, sparse or
 hidden index state (`skip-worktree` or `assume-unchanged`), changed gitlinks,

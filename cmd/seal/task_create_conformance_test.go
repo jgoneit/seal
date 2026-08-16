@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1161,6 +1162,14 @@ func createContractAssertRejectedUnchanged(
 
 func createContractAssertTaskDirectory(t *testing.T, repository, taskID string) {
 	t.Helper()
+	wantDirectoryMode := os.FileMode(0o755)
+	wantTaskMode := os.FileMode(0o644)
+	if runtime.GOOS == "windows" {
+		// Windows reports synthesized permission bits for ordinary directories
+		// and writable files rather than the POSIX modes supplied at creation.
+		wantDirectoryMode = 0o777
+		wantTaskMode = 0o666
+	}
 	tasks := filepath.Join(repository, ".seal", "tasks")
 	entries, err := os.ReadDir(tasks)
 	if err != nil {
@@ -1173,15 +1182,15 @@ func createContractAssertTaskDirectory(t *testing.T, repository, taskID string) 
 	if err != nil {
 		t.Fatalf("Stat(%q): %v", tasks, err)
 	}
-	if got := tasksInfo.Mode().Perm(); got != 0o755 {
-		t.Fatalf("Task directory mode = %o, want 755", got)
+	if got := tasksInfo.Mode().Perm(); got != wantDirectoryMode {
+		t.Fatalf("Task directory mode = %o, want %o", got, wantDirectoryMode)
 	}
 	taskInfo, err := os.Stat(createContractTaskPath(repository, taskID))
 	if err != nil {
 		t.Fatalf("Stat Task: %v", err)
 	}
-	if got := taskInfo.Mode().Perm(); got != 0o644 {
-		t.Fatalf("Task mode = %o, want 644", got)
+	if got := taskInfo.Mode().Perm(); got != wantTaskMode {
+		t.Fatalf("Task mode = %o, want %o", got, wantTaskMode)
 	}
 }
 

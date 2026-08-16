@@ -290,8 +290,12 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 		t.Fatal("Changes() exposed previous_path pointer storage")
 	}
 	toolEntry := snapshotEntry(result.Snapshot().Entries, "src/tool.sh")
-	if toolEntry == nil || toolEntry.Mode == nil || *toolEntry.Mode != "100755" {
-		t.Fatalf("tool entry = %#v, want executable mode", toolEntry)
+	wantToolMode := "100755"
+	if runtime.GOOS == "windows" {
+		wantToolMode = "100644"
+	}
+	if toolEntry == nil || toolEntry.Mode == nil || *toolEntry.Mode != wantToolMode {
+		t.Fatalf("untracked tool entry = %#v, want native mode %s", toolEntry, wantToolMode)
 	}
 	if runtime.GOOS != "windows" {
 		linkEntry := snapshotEntry(result.Snapshot().Entries, "src/link")
@@ -314,6 +318,33 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 		if bytes.Contains(patch, forbidden) {
 			t.Fatalf("DiffPatch() contains Seal metadata %q", forbidden)
 		}
+	}
+}
+
+func TestObservePreservesTrackedGitExecutableMode(t *testing.T) {
+	repository := newFixtureRepository(t, "sha1")
+	mode := os.FileMode(0o755)
+	if runtime.GOOS == "windows" {
+		mode = 0o644
+	}
+	repository.write("src/tool.sh", []byte("#!/bin/sh\nexit 0\n"), mode)
+	repository.git("add", "src/tool.sh")
+	repository.git("update-index", "--chmod=+x", "src/tool.sh")
+	repository.git("commit", "-q", "-m", "baseline")
+	baseline := strings.TrimSpace(repository.git("rev-parse", "HEAD"))
+
+	repository.write("src/tool.sh", []byte("#!/bin/sh\nexit 1\n"), mode)
+	result, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	if err != nil {
+		t.Fatalf("Observe() error = %v", err)
+	}
+	entry := snapshotEntry(result.Snapshot().Entries, "src/tool.sh")
+	if entry == nil || entry.Mode == nil || *entry.Mode != "100755" {
+		t.Fatalf("tracked executable entry = %#v, want mode 100755", entry)
+	}
+	change := findChange(t, result.Changes().Changes, "unstaged", "modified", "src/tool.sh")
+	if change.ModeChanged || change.OldMode == nil || *change.OldMode != "100755" || change.NewMode == nil || *change.NewMode != "100755" {
+		t.Fatalf("tracked executable change = %#v, want content-only 100755 change", change)
 	}
 }
 

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func TestTimeoutTerminatesProcessGroup(t *testing.T) {
+func TestTimeoutTerminatesProcessTree(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
 	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
