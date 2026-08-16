@@ -94,17 +94,12 @@ func newEvidenceWriter(repository, taskID string, hooks verifyHooks) (*evidenceW
 		if runExists || stagingExists {
 			continue
 		}
-		if err := parent.Mkdir(stagingName, 0o700); err != nil {
+		if err := createPrivateStagingDirectory(parent, stagingName); err != nil {
 			if errors.Is(err, fs.ErrExist) {
 				continue
 			}
 			_ = parent.Close()
 			return nil, &RepositoryError{message: "Could not create the private Evidence staging directory."}
-		}
-		if err := parent.Chmod(stagingName, 0o700); err != nil {
-			_ = parent.RemoveAll(stagingName)
-			_ = parent.Close()
-			return nil, &RepositoryError{message: "Could not make the Evidence staging directory private."}
 		}
 		staging, err := parent.OpenRoot(stagingName)
 		if err != nil {
