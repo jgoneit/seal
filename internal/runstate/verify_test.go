@@ -332,7 +332,7 @@ func TestVerifyExhaustsRunIDCollisionsWithoutOverwriting(t *testing.T) {
 	_, err := verifyWithHooks(repository, taskID, verifyHooks{
 		runIDGenerator: func() (string, error) { return runID, nil },
 	})
-	if err == nil || KindOf(err) != KindInvalidInput {
+	if err == nil || KindOf(err) != KindRepository {
 		t.Fatalf("verifyWithHooks() error = %v, kind = %v; want allocation exhaustion", err, KindOf(err))
 	}
 	contents, readErr := os.ReadFile(sentinel)
