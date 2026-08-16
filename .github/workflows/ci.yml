@@ -84,10 +84,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $unformatted = @(gofmt -l .)
-          if ($unformatted.Count -ne 0) {
-            $unformatted
-            exit 1
+          gofmt -w .
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          git diff --exit-code -- '*.go'
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          git restore --worktree -- '*.go'
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
           }
 
       - name: Verify modules
