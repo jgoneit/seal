@@ -39,6 +39,45 @@ func TestCreatePrivateCompletionTempAppliesProtectedDACL(t *testing.T) {
 	}
 }
 
+func TestCreatePrivateCompletionTempCleansPostCreateFailures(t *testing.T) {
+	tests := []struct {
+		name  string
+		hooks completionTempHooks
+	}{
+		{
+			name: "os.NewFile",
+			hooks: completionTempHooks{
+				newFile: func(uintptr, string) *os.File { return nil },
+			},
+		},
+		{
+			name: "Stat",
+			hooks: completionTempHooks{
+				stat: func(*os.File) (fs.FileInfo, error) { return nil, errors.New("stat fault") },
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			root, err := os.OpenRoot(directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+
+			const name = ".completion-0123456789abcdef0123456789abcdef.tmp"
+			file, info, err := createPrivateCompletionTempWithHooks(root, name, test.hooks)
+			if err == nil || file != nil || info != nil {
+				t.Fatalf("createPrivateCompletionTempWithHooks() = %v, %v, %v; want nil, nil, error", file, info, err)
+			}
+			if _, statErr := root.Lstat(name); !errors.Is(statErr, fs.ErrNotExist) {
+				t.Fatalf("private completion staging residue remains: %v", statErr)
+			}
+		})
+	}
+}
+
 func assertPrivateCompletionDACL(t *testing.T, handle windows.Handle) {
 	t.Helper()
 	descriptor, err := windows.GetSecurityInfo(handle, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
