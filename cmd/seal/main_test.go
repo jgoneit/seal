@@ -84,6 +84,75 @@ func TestMainInformationalCommandsIgnoreDeletedWorkingDirectory(t *testing.T) {
 	}
 }
 
+func TestMainStateCommandsApplyApprovedDeletedCWDRepositoryFailureWithoutWrites(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit removing a process's current directory")
+	}
+	tests := []struct {
+		name       string
+		args       []string
+		wantCode   int
+		wantStderr string
+	}{
+		{
+			name:       "valid task show",
+			args:       []string{"task", "show", "TASK-001"},
+			wantCode:   3,
+			wantStderr: "error: Task commands must run inside a Git repository.\n",
+		},
+		{
+			name:       "valid run show",
+			args:       []string{"run", "show", "TASK-001", "--run-id", "RUN-001"},
+			wantCode:   3,
+			wantStderr: "error: Task commands must run inside a Git repository.\n",
+		},
+		{
+			name:       "invalid task id remains invalid input",
+			args:       []string{"task", "show", "../TASK-001"},
+			wantCode:   2,
+			wantStderr: "error: Task id must begin with an alphanumeric character and contain only letters, numbers, underscores, or hyphens.\n",
+		},
+		{
+			name:       "invalid run id remains invalid input",
+			args:       []string{"run", "show", "TASK-001", "--run-id", "../RUN-001"},
+			wantCode:   2,
+			wantStderr: "error: Run id must begin with an alphanumeric character and contain only letters, numbers, underscores, or hyphens.\n",
+		},
+		{
+			name:     "missing run id remains usage error",
+			args:     []string{"run", "show", "TASK-001"},
+			wantCode: 2,
+			wantStderr: "error: run show requires --run-id <RUN_ID>\n" +
+				"usage: seal task show <TASK_ID>\n" +
+				"       seal run show <TASK_ID> --run-id <RUN_ID>\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			workingDirectory := filepath.Join(root, "cwd")
+			if err := os.Mkdir(workingDirectory, 0o755); err != nil {
+				t.Fatalf("Mkdir(%q): %v", workingDirectory, err)
+			}
+			mustWriteTestFile(t, filepath.Join(root, "outside", ".seal", "sentinel"), []byte("unchanged\n"))
+			wantTree := snapshotTestTree(t, root)
+			delete(wantTree, "cwd") // The subprocess helper intentionally unlinks its cwd.
+
+			result := runMainSubprocessAt(t, workingDirectory, true, test.args...)
+			want := mainSubprocessResult{
+				code:   test.wantCode,
+				stderr: test.wantStderr,
+			}
+			if result != want {
+				t.Fatalf("result = %#v, want %#v", result, want)
+			}
+			if after := snapshotTestTree(t, root); !reflect.DeepEqual(after, wantTree) {
+				t.Fatalf("deleted-cwd command changed the surrounding tree:\nbefore: %#v\nafter:  %#v", wantTree, after)
+			}
+		})
+	}
+}
+
 type mainSubprocessResult struct {
 	code   int
 	stdout string
@@ -96,6 +165,11 @@ func runMainSubprocess(t *testing.T, deleteWorkingDirectory bool, args ...string
 	if err := os.Mkdir(workingDirectory, 0o755); err != nil {
 		t.Fatalf("Mkdir(%q): %v", workingDirectory, err)
 	}
+	return runMainSubprocessAt(t, workingDirectory, deleteWorkingDirectory, args...)
+}
+
+func runMainSubprocessAt(t *testing.T, workingDirectory string, deleteWorkingDirectory bool, args ...string) mainSubprocessResult {
+	t.Helper()
 	commandArgs := append([]string{"-test.run=^TestMainSubprocessHelper$", "--"}, args...)
 	command := exec.Command(os.Args[0], commandArgs...)
 	command.Dir = workingDirectory

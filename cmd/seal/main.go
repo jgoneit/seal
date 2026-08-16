@@ -39,8 +39,9 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 
 	workingDirectory, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(stderr, "error: could not resolve the working directory: %v\n", err)
-		return 3
+		// Preserve command and identity validation before applying the approved
+		// deleted-cwd repository classification to an otherwise valid query.
+		return runCLI("", args, stdout, stderr)
 	}
 	return runCLI(workingDirectory, args, stdout, stderr)
 }
