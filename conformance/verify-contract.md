@@ -158,7 +158,10 @@ mechanical-result, and manifest-digest semantics.
 
 - Run ids are UUID-v4-shaped 32-character lowercase hexadecimal values.
   Allocation retries at most 100 true collisions.
-- Staging is a sibling `.tmp-<RUN_ID>` directory with mode `0700`.
+- Staging is a sibling `.tmp-<RUN_ID>` directory. POSIX systems enforce mode
+  `0700`. Windows applies a protected DACL that grants inheritable full access
+  only to the current process-token user and LocalSystem before any artifact is
+  written.
 - Writer ancestors `.seal`, `.seal/evidence`, and the Task Evidence directory
   must be real directories. Symlinks, non-directories, and repository escape
   are rejected.

@@ -70,12 +70,14 @@ invoke another Toolkit module.
 
 For the Evidence writer only, Go prevalidates the saved Task and check
 definitions before S0, writes into a private sibling staging directory, and
-publishes the complete directory with a native no-replace rename. It rejects
-symlinked or non-directory writer ancestors and repository escape. These are
-approved writer-safety and whole-directory atomicity divergences from the
-frozen writer, which exposes incomplete Run directories after some failures.
-They do not change the recorded Task, check, Scope, source, verification, or
-manifest meanings consumed by either frozen Python or Go `run show`.
+publishes the complete directory with a native no-replace rename. Private means
+mode `0700` on POSIX and, on Windows, a protected inheritable DACL containing
+only the current process-token user and LocalSystem. It rejects symlinked or
+non-directory writer ancestors and repository escape. These are approved
+writer-safety and whole-directory atomicity divergences from the frozen writer,
+which exposes incomplete Run directories after some failures. They do not
+change the recorded Task, check, Scope, source, verification, or manifest
+meanings consumed by either frozen Python or Go `run show`.
 
 Atomic publication is claimed only for same-filesystem local POSIX filesystems
 with the required native rename primitive and for NTFS. Network filesystems,
