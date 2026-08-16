@@ -230,7 +230,7 @@ jobs:
           fi
           release_flags=(--verify-tag --generate-notes --title "Seal ${GITHUB_REF_NAME}")
           case "${GITHUB_REF_NAME}" in
-            *-rc.*) release_flags+=(--prerelease) ;;
+            *-rc.*) release_flags+=(--prerelease --latest=false) ;;
           esac
           gh release create "${GITHUB_REF_NAME}" \
             dist/seal_* \
