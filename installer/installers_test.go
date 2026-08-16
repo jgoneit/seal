@@ -278,7 +278,7 @@ func TestInstallPowerShellRejectsDriveRelativeDestination(t *testing.T) {
 	}
 }
 
-func TestInstallPowerShellPostInstallSmokeFailureRestoresExistingBinary(t *testing.T) {
+func TestInstallPowerShellFinalizerRestoresExistingBinaryAfterSmokeFailure(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("install.ps1 requires native Windows")
 	}
@@ -298,8 +298,12 @@ func TestInstallPowerShellPostInstallSmokeFailureRestoresExistingBinary(t *testi
 		installerEnvironment(server.URL, installDir),
 		map[string]string{"SEAL_TEST_POST_SMOKE_FAIL": "1"},
 	)
-	if output, err := command.CombinedOutput(); err == nil {
+	output, err := command.CombinedOutput()
+	if err == nil {
 		t.Fatalf("install.ps1 unexpectedly accepted failed installed smoke:\n%s", output)
+	}
+	if !strings.Contains(string(output), "absolute-path version smoke test") {
+		t.Fatalf("install.ps1 failed outside the post-replacement smoke path:\n%s", output)
 	}
 
 	got, err := os.ReadFile(target)
