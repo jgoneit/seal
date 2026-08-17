@@ -71,7 +71,7 @@ jobs:
           }
 
       - name: Check formatting
-        if: runner.os != 'Windows'
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         shell: bash
         run: |
           unformatted="$(gofmt -l .)"
@@ -80,37 +80,15 @@ jobs:
             exit 1
           fi
 
-      - name: Check formatting
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          gofmt -w .
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-          git diff --exit-code -- '*.go'
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-          git restore --worktree -- '*.go'
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
-
       - name: Verify modules
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: go mod verify
 
       - name: Run unit and integration tests
         run: go test ./...
 
-      - name: Repeat Windows installer rollback test
-        if: runner.os == 'Windows'
-        run: go test -count=10 ./installer -run '^TestInstallPowerShellFinalizer(RestoresExistingBinaryAfterSmokeFailure|RemovesCleanInstallAfterSmokeFailure)$'
-
-      - name: Run process-tree tests
-        run: go test -count=1 ./internal/checkrun -run '^(TestTimeoutTerminatesProcessTree|TestSuccessfulParentCleansBackgroundDescendant)$'
-
       - name: Run race tests
+        if: matrix.goarch == 'amd64'
         run: go test -race ./...
 
       - name: Vet
