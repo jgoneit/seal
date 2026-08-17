@@ -26,9 +26,12 @@ These instructions apply to the entire repository.
 ## Implementation rules
 
 - Prefer the Go standard library.
+- Do not export production APIs or add production indirection solely for tests.
 - Never execute runtime shell command strings. A future Git integration must
   pass an explicit argv to `os/exec`.
 - Keep public output and exit behavior deterministic and machine-consumable.
+- Keep prose proportional: preserve unique API semantics and link to the
+  canonical contract instead of restating it.
 - Keep each change within one conformance slice and document what remains
   intentionally unsupported.
 
