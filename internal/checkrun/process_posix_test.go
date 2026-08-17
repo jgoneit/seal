@@ -18,16 +18,17 @@ import (
 func TestTimeoutTerminatesProcessTree(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("SEAL_CHECKRUN_POSIX_HELPER", "1")
 
 	started := time.Now()
-	results, err := Run([]Definition{{
+	results, err := RunRooted([]Definition{{
 		Name:           "timeout tree",
 		Argv:           posixHelperArgv("tree-parent-block", childPIDPath),
 		Required:       true,
 		TimeoutSeconds: big.NewInt(1),
-	}}, repository, evidence)
+	}}, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -44,14 +45,15 @@ func TestTimeoutTerminatesProcessTree(t *testing.T) {
 func TestSuccessfulParentCleansBackgroundDescendant(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("SEAL_CHECKRUN_POSIX_HELPER", "1")
 
-	results, err := Run([]Definition{{
+	results, err := RunRooted([]Definition{{
 		Name:     "background child",
 		Argv:     posixHelperArgv("tree-parent-exit", childPIDPath),
 		Required: true,
-	}}, repository, evidence)
+	}}, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

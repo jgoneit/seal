@@ -20,9 +20,9 @@ func TestCreatePrivateCompletionTempAppliesProtectedDACL(t *testing.T) {
 	defer root.Close()
 
 	const name = ".completion-0123456789abcdef0123456789abcdef.tmp"
-	file, info, err := createPrivateCompletionTemp(root, name)
+	file, info, err := createPrivateCompletionTempWithHooks(root, name, completionTempHooks{})
 	if err != nil {
-		t.Fatalf("createPrivateCompletionTemp(): %v", err)
+		t.Fatalf("createPrivateCompletionTempWithHooks(): %v", err)
 	}
 	if info == nil || !info.Mode().IsRegular() {
 		_ = file.Close()
@@ -34,7 +34,7 @@ func TestCreatePrivateCompletionTempAppliesProtectedDACL(t *testing.T) {
 	}
 	defer root.Remove(name)
 
-	if _, _, err := createPrivateCompletionTemp(root, name); !errors.Is(err, fs.ErrExist) {
+	if _, _, err := createPrivateCompletionTempWithHooks(root, name, completionTempHooks{}); !errors.Is(err, fs.ErrExist) {
 		t.Fatalf("collision error = %v, want fs.ErrExist", err)
 	}
 }

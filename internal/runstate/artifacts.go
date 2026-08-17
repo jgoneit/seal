@@ -79,8 +79,8 @@ func readRequiredArtifact(runDirectory, relativePath string) ([]byte, error) {
 	if err == nil {
 		return contents, nil
 	}
-	var evidence *EvidenceError
-	if !errorsAsEvidence(err, &evidence) {
+	evidence, ok := err.(*EvidenceError)
+	if !ok {
 		return nil, err
 	}
 	switch evidence.message {
@@ -91,12 +91,4 @@ func readRequiredArtifact(runDirectory, relativePath string) ([]byte, error) {
 	default:
 		return nil, &EvidenceError{message: fmt.Sprintf("Could not read evidence file: %s.", relativePath)}
 	}
-}
-
-func errorsAsEvidence(err error, target **EvidenceError) bool {
-	value, ok := err.(*EvidenceError)
-	if ok {
-		*target = value
-	}
-	return ok
 }

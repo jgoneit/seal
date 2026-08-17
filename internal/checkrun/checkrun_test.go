@@ -25,6 +25,7 @@ func TestRunRecordsReferenceContractAndContinues(t *testing.T) {
 		t.Fatal(err)
 	}
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	orderPath := filepath.Join(t.TempDir(), "order.txt")
 	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
 	t.Setenv("SEAL_CHECKRUN_INHERITED", "inherited-value")
@@ -53,7 +54,7 @@ func TestRunRecordsReferenceContractAndContinues(t *testing.T) {
 		},
 	}
 
-	results, err := Run(checks, repository, evidence)
+	results, err := RunRooted(checks, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -180,6 +181,7 @@ func TestRunRootedKeepsLogsInRetainedEvidenceDirectory(t *testing.T) {
 func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
 
 	inputPath := filepath.Join(t.TempDir(), "stdin.bin")
@@ -196,10 +198,10 @@ func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
 	os.Stdin = stdin
 	defer func() { os.Stdin = previousStdin }()
 
-	results, err := Run([]Definition{
+	results, err := RunRooted([]Definition{
 		{Name: "stdin", Argv: helperArgv("copy-stdin"), Required: true},
 		{Name: "large", Argv: helperArgv("large", strconv.Itoa(2*1024*1024)), Required: true},
-	}, repository, evidence)
+	}, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -230,18 +232,19 @@ func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
 func TestRunPreservesArbitraryPrecisionTimeout(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
 	huge, ok := new(big.Int).SetString("100000000000000000000000000000000000000000000000001", 10)
 	if !ok {
 		t.Fatal("could not build huge timeout")
 	}
 
-	results, err := Run([]Definition{{
+	results, err := RunRooted([]Definition{{
 		Name:           "huge timeout",
 		Argv:           helperArgv("exit", "0"),
 		Required:       true,
 		TimeoutSeconds: huge,
-	}}, repository, evidence)
+	}}, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -273,7 +276,8 @@ func TestRunRejectsInvalidDefinitions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := Run([]Definition{test.definition}, repository, privateTempDirectory(t))
+			evidenceRoot := openTestRoot(t, privateTempDirectory(t))
+			_, err := RunRooted([]Definition{test.definition}, repository, evidenceRoot)
 			var definitionError *DefinitionError
 			if !errors.As(err, &definitionError) {
 				t.Fatalf("error type = %T, want DefinitionError (%v)", err, err)
@@ -296,8 +300,9 @@ func TestRunReportsInfrastructureFault(t *testing.T) {
 	if err := os.Mkdir(stdoutPath, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	evidenceRoot := openTestRoot(t, evidence)
 
-	_, err := Run([]Definition{{Name: "blocked", Argv: []string{"unused"}}}, repository, evidence)
+	_, err := RunRooted([]Definition{{Name: "blocked", Argv: []string{"unused"}}}, repository, evidenceRoot)
 	var infrastructureError *InfrastructureError
 	if !errors.As(err, &infrastructureError) {
 		t.Fatalf("error type = %T, want InfrastructureError (%v)", err, err)
@@ -317,15 +322,16 @@ func TestConcurrentRunsUseIsolatedLogs(t *testing.T) {
 	errorsChannel := make(chan error, runCount)
 	for index := 0; index < runCount; index++ {
 		index := index
+		evidence := evidenceRoots[index]
+		evidenceRoot := openTestRoot(t, evidence)
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			evidence := evidenceRoots[index]
-			results, err := Run([]Definition{{
+			results, err := RunRooted([]Definition{{
 				Name:     "concurrent",
 				Argv:     helperArgv("text", strconv.Itoa(index)),
 				Required: true,
-			}}, repository, evidence)
+			}}, repository, evidenceRoot)
 			if err != nil {
 				errorsChannel <- err
 				return
@@ -436,6 +442,16 @@ func helperArguments() []string {
 func privateTempDirectory(t *testing.T) string {
 	t.Helper()
 	return privateDirectoryAt(t, filepath.Join(t.TempDir(), "evidence"))
+}
+
+func openTestRoot(t *testing.T, directory string) *os.Root {
+	t.Helper()
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	return root
 }
 
 func privateDirectoryAt(t *testing.T, path string) string {

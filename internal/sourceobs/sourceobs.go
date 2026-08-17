@@ -100,9 +100,7 @@ type ChangeSet struct {
 	Baseline          string
 	Scope             []string
 	Changes           []Change
-	MetadataChanges   []Change
 	ProductChanges    []Change
-	InScopeChanges    []Change
 	OutOfScopeChanges []Change
 }
 
@@ -118,9 +116,6 @@ type SnapshotResult struct {
 	snapshot     Snapshot
 	snapshotJSON []byte
 }
-
-// Snapshot returns a detached Source Snapshot model.
-func (result SnapshotResult) Snapshot() Snapshot { return cloneSnapshot(result.snapshot) }
 
 // SnapshotJSON returns exact, newline-terminated Source Snapshot artifact bytes.
 func (result SnapshotResult) SnapshotJSON() []byte {
@@ -148,32 +143,6 @@ func (result ChangeResult) ChangedFilesJSON() []byte {
 
 // DiffPatch returns a detached raw binary patch for all product change layers.
 func (result ChangeResult) DiffPatch() []byte { return append([]byte(nil), result.diffPatch...) }
-
-// Result is the detached composite convenience result returned by Observe.
-// Verify and Complete must use ObserveSnapshot and ObserveChanges directly to
-// preserve S0 -> checks -> S1 -> changes/diff ordering.
-type Result struct {
-	snapshot SnapshotResult
-	changes  ChangeResult
-}
-
-// Snapshot returns a detached Source Snapshot model.
-func (result Result) Snapshot() Snapshot { return result.snapshot.Snapshot() }
-
-// SnapshotJSON returns exact, newline-terminated Source Snapshot artifact bytes.
-func (result Result) SnapshotJSON() []byte { return result.snapshot.SnapshotJSON() }
-
-// SnapshotSHA256 returns the digest of the canonical compact Snapshot payload.
-func (result Result) SnapshotSHA256() string { return result.snapshot.SnapshotSHA256() }
-
-// Changes returns a detached layered changed-file model.
-func (result Result) Changes() ChangeSet { return result.changes.Changes() }
-
-// ChangedFilesJSON returns exact, newline-terminated changed-files/v1 bytes.
-func (result Result) ChangedFilesJSON() []byte { return result.changes.ChangedFilesJSON() }
-
-// DiffPatch returns a detached raw binary patch for all product change layers.
-func (result Result) DiffPatch() []byte { return result.changes.DiffPatch() }
 
 // ObserveSnapshot collects only one stable Source Snapshot for Verify S0/S1 or
 // Complete S2. It does not inspect Scope, collect layered changes, or run a
@@ -229,21 +198,6 @@ func ObserveChanges(request Request) (ChangeResult, error) {
 	return ChangeResult{changes: changes, changedFilesJSON: changedFilesJSON, diffPatch: diffPatch}, nil
 }
 
-// Observe collects one Source Snapshot, layered changed-files document, and
-// raw binary patch. The final source is observed exactly twice and never
-// retried; any semantic or filesystem-fingerprint disagreement fails closed.
-func Observe(request Request) (Result, error) {
-	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: request.CWD, Baseline: request.Baseline})
-	if err != nil {
-		return Result{}, err
-	}
-	changes, err := ObserveChanges(request)
-	if err != nil {
-		return Result{}, err
-	}
-	return Result{snapshot: snapshot, changes: changes}, nil
-}
-
 func validateScope(scope []string) ([]string, error) {
 	if len(scope) == 0 {
 		return nil, invalidRequest("Task scope must be a non-empty array.", nil)
@@ -271,15 +225,6 @@ func validateScope(scope []string) ([]string, error) {
 	return validated, nil
 }
 
-func cloneSnapshot(source Snapshot) Snapshot {
-	return Snapshot{
-		SchemaVersion: source.SchemaVersion,
-		Baseline:      source.Baseline,
-		Entries:       cloneEntries(source.Entries),
-		SHA256:        source.SHA256,
-	}
-}
-
 func cloneEntries(source []Entry) []Entry {
 	result := make([]Entry, len(source))
 	for index, entry := range source {
@@ -299,9 +244,7 @@ func cloneChangeSet(source ChangeSet) ChangeSet {
 		Baseline:          source.Baseline,
 		Scope:             append([]string(nil), source.Scope...),
 		Changes:           cloneChanges(source.Changes),
-		MetadataChanges:   cloneChanges(source.MetadataChanges),
 		ProductChanges:    cloneChanges(source.ProductChanges),
-		InScopeChanges:    cloneChanges(source.InScopeChanges),
 		OutOfScopeChanges: cloneChanges(source.OutOfScopeChanges),
 	}
 }
