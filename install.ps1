@@ -58,8 +58,8 @@ if ($args.Count -ne 2 -or $args[0] -cne "-Version") {
 }
 
 $tag = [string]$args[1]
-if ($tag -cnotmatch '^v[0-9][0-9A-Za-z._-]*$') {
-    [Console]::Error.WriteLine("seal installer: TAG must start with v followed by a digit and contain only release-safe characters.")
+if ($tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?\z') {
+    [Console]::Error.WriteLine("seal installer: TAG must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N.")
     exit 1
 }
 
