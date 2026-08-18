@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,17 @@ import (
 )
 
 const installerTestTag = "v1.2.3-rc.1"
+
+var invalidInstallerTags = []string{
+	"v1",
+	"v1.2",
+	"v1foo",
+	"v1.2.3-rc.0",
+	"v1.2.3-beta.1",
+	"v1.2.3.4",
+	"v1.2.3\n",
+	"V1.2.3",
+}
 
 func TestInstallShellCleanInstall(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
@@ -216,6 +228,24 @@ func TestInstallPowerShellCleanInstall(t *testing.T) {
 		t.Fatalf("installer output %q does not identify absolute target %q", output, target)
 	}
 	assertNoInstallerResidue(t, installDir)
+}
+
+func TestInstallersRejectNonReleaseTags(t *testing.T) {
+	powerShell := ""
+	if runtime.GOOS == "windows" {
+		powerShell = windowsPowerShell(t)
+	}
+	for _, tag := range invalidInstallerTags {
+		command := exec.Command("sh", repositoryPath(t, "install.sh"), "--version", tag)
+		if runtime.GOOS == "windows" {
+			command = exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", repositoryPath(t, "install.ps1"), "-Version", tag)
+		}
+		output, err := command.CombinedOutput()
+		var exitError *exec.ExitError
+		if !errors.As(err, &exitError) || exitError.ExitCode() != 1 || !strings.Contains(string(output), "seal installer: TAG ") {
+			t.Errorf("installer accepted %q or returned the wrong error: %v\n%s", tag, err, output)
+		}
+	}
 }
 
 func TestInstallPowerShellRejectsUntrustedReleaseWithoutReplacingExistingBinary(t *testing.T) {

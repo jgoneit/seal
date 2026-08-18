@@ -20,17 +20,18 @@ import (
 func TestTimeoutTerminatesProcessTree(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("SEAL_CHECKRUN_WINDOWS_TREE_HELPER", "1")
 
 	runDone := make(chan windowsTreeRunResult, 1)
 	go func() {
-		results, err := Run([]Definition{{
+		results, err := RunRooted([]Definition{{
 			Name:           "timeout tree",
 			Argv:           windowsTreeHelperArgv("tree-parent-block", childPIDPath),
 			Required:       true,
 			TimeoutSeconds: big.NewInt(3),
-		}}, repository, evidence)
+		}}, repository, evidenceRoot)
 		runDone <- windowsTreeRunResult{results: results, err: err}
 	}()
 
@@ -56,6 +57,7 @@ func TestTimeoutTerminatesProcessTree(t *testing.T) {
 func TestSuccessfulParentCleansBackgroundDescendant(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
 	fixtureDirectory := t.TempDir()
 	childPIDPath := filepath.Join(fixtureDirectory, "child.pid")
 	releasePath := filepath.Join(fixtureDirectory, "release")
@@ -63,12 +65,12 @@ func TestSuccessfulParentCleansBackgroundDescendant(t *testing.T) {
 
 	runDone := make(chan windowsTreeRunResult, 1)
 	go func() {
-		results, err := Run([]Definition{{
+		results, err := RunRooted([]Definition{{
 			Name:           "background child",
 			Argv:           windowsTreeHelperArgv("tree-parent-exit", childPIDPath, releasePath),
 			Required:       true,
 			TimeoutSeconds: big.NewInt(10),
-		}}, repository, evidence)
+		}}, repository, evidenceRoot)
 		runDone <- windowsTreeRunResult{results: results, err: err}
 	}()
 
@@ -109,12 +111,13 @@ func TestRunDoesNotInheritUnlistedHandle(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	evidenceRoot := openTestRoot(t, evidence)
 
-	results, err := Run([]Definition{{
+	results, err := RunRooted([]Definition{{
 		Name:     "handle probe",
 		Argv:     windowsHelperArgv("signal-event", strconv.FormatUint(uint64(sentinel), 10)),
 		Required: true,
-	}}, repository, evidence)
+	}}, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

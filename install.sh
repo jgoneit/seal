@@ -18,12 +18,11 @@ fi
 
 tag=$2
 case "$tag" in
-  v[0-9]*) ;;
-  *) fail 'TAG must start with v followed by a digit.' ;;
-esac
-case "$tag" in
   *[!A-Za-z0-9._-]*) fail 'TAG contains unsupported characters.' ;;
 esac
+if ! printf '%s\n' "$tag" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$'; then
+  fail 'TAG must match vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N.'
+fi
 
 version=${tag#v}
 release_base=${SEAL_RELEASE_BASE_URL:-https://github.com/jgoneit/seal/releases/download}

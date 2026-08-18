@@ -8,10 +8,6 @@ import (
 	"os"
 )
 
-func createPrivateCompletionTemp(root *os.Root, name string) (*os.File, fs.FileInfo, error) {
-	return createPrivateCompletionTempWithHooks(root, name, completionTempHooks{})
-}
-
 func createPrivateCompletionTempWithHooks(root *os.Root, name string, hooks completionTempHooks) (*os.File, fs.FileInfo, error) {
 	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {

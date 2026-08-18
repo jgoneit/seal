@@ -68,21 +68,11 @@ func TestValidateRunAndDetachedSummary(t *testing.T) {
 		t.Fatalf("scope violations = %#v", summary.ScopeViolations)
 	}
 
-	// A caller cannot mutate the value retained by the validated authority.
 	summary.Checks[0].Name = "changed"
 	summary.Checks = append(summary.Checks, Check{})
 	again := validated.Summary()
 	if len(again.Checks) != 1 || again.Checks[0].Name != "unit-test" {
 		t.Fatalf("Summary() retained caller mutation: %#v", again.Checks)
-	}
-
-	encoded, err := json.Marshal(again)
-	if err != nil {
-		t.Fatal(err)
-	}
-	prefix := `{"checks":[{"exit_code":0,"name":"unit-test","passed":true,"required":true,"timed_out":false}],"evidence_sha256":`
-	if !strings.HasPrefix(string(encoded), prefix) {
-		t.Fatalf("summary field order/content = %s", encoded)
 	}
 }
 
@@ -556,9 +546,6 @@ func TestReferenceJSONRejectsUnsupportedLoneSurrogate(t *testing.T) {
 	if _, err := summary.ReferenceJSON(); err == nil {
 		t.Fatal("ReferenceJSON() accepted unsupported lone surrogate")
 	}
-	if _, err := json.Marshal(summary); err != nil {
-		t.Fatalf("safe MarshalJSON rejected escaped surrogate: %v", err)
-	}
 }
 
 func TestEscapedLoneSurrogateRemainsValidAndLossless(t *testing.T) {
@@ -617,13 +604,6 @@ func TestEscapedLoneSurrogateRemainsValidAndLossless(t *testing.T) {
 	summary := validated.Summary()
 	if len(summary.ScopeViolations) != 1 || summary.ScopeViolations[0].Path != changedPath {
 		t.Fatalf("scope violations = %#v", summary.ScopeViolations)
-	}
-	publicJSON, err := json.Marshal(summary)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(publicJSON), `"path":"docs/\udcff"`) || strings.Contains(string(publicJSON), "�") {
-		t.Fatalf("public summary lost surrogate: %s", publicJSON)
 	}
 	referenceJSON, err := summary.ReferenceJSON()
 	if err != nil {

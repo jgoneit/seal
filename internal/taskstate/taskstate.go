@@ -93,11 +93,6 @@ func (e *Error) Unwrap() error {
 	return e.cause
 }
 
-// Kind returns the stable command error class.
-func (e *Error) Kind() ErrorKind {
-	return e.kind
-}
-
 // KindOf returns the stable command error class carried by err.
 func KindOf(err error) (ErrorKind, bool) {
 	var taskError *Error

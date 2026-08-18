@@ -76,8 +76,7 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 
 	workingDirectory, err := os.Getwd()
 	if err != nil {
-		// Preserve command and identity validation before applying the approved
-		// deleted-cwd repository classification to an otherwise valid query.
+		// Keep argument and identity validation ahead of repository failure.
 		return runCLI("", args, stdout, stderr)
 	}
 	return runCLI(workingDirectory, args, stdout, stderr)

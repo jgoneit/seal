@@ -22,55 +22,57 @@ type fixtureRepository struct {
 	root string
 }
 
-func TestObserveCleanCanonicalDocumentsAndDetachedResults(t *testing.T) {
+func TestPhaseResultsCleanCanonicalDocumentsAndDetachedBytes(t *testing.T) {
 	repository := newFixtureRepository(t, "sha1")
 	repository.write("src/base.txt", []byte("baseline\n"), 0o644)
 	baseline := repository.commit("baseline")
 
-	result, err := Observe(Request{CWD: filepath.Join(repository.root, "src"), Baseline: baseline, Scope: []string{"src"}})
+	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: filepath.Join(repository.root, "src"), Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe() error = %v", err)
+		t.Fatalf("ObserveSnapshot() error = %v", err)
 	}
-	if entries := result.Snapshot().Entries; len(entries) != 0 {
+	if entries := snapshot.snapshot.Entries; len(entries) != 0 {
 		t.Fatalf("Snapshot entries = %#v, want clean", entries)
+	}
+	changes, err := ObserveChanges(Request{CWD: filepath.Join(repository.root, "src"), Baseline: baseline, Scope: []string{"src"}})
+	if err != nil {
+		t.Fatalf("ObserveChanges() error = %v", err)
 	}
 	payload := fmt.Sprintf(`{"baseline":"%s","entries":[],"schema_version":1}`, baseline)
 	digest := sha256.Sum256([]byte(payload))
 	wantDigest := hex.EncodeToString(digest[:])
-	if got := result.SnapshotSHA256(); got != wantDigest {
+	if got := snapshot.SnapshotSHA256(); got != wantDigest {
 		t.Fatalf("SnapshotSHA256() = %q, want %q", got, wantDigest)
 	}
 	wantSnapshotJSON := fmt.Sprintf("{\n  \"baseline\": \"%s\",\n  \"entries\": [],\n  \"schema_version\": 1,\n  \"snapshot_sha256\": \"%s\"\n}\n", baseline, wantDigest)
-	if got := string(result.SnapshotJSON()); got != wantSnapshotJSON {
+	if got := string(snapshot.SnapshotJSON()); got != wantSnapshotJSON {
 		t.Fatalf("SnapshotJSON() =\n%s\nwant:\n%s", got, wantSnapshotJSON)
 	}
 	wantChangedJSON := fmt.Sprintf("{\n  \"baseline\": \"%s\",\n  \"changes\": [],\n  \"schema_version\": 1,\n  \"scope\": [\n    \"src\"\n  ]\n}\n", baseline)
-	if got := string(result.ChangedFilesJSON()); got != wantChangedJSON {
+	if got := string(changes.ChangedFilesJSON()); got != wantChangedJSON {
 		t.Fatalf("ChangedFilesJSON() =\n%s\nwant:\n%s", got, wantChangedJSON)
 	}
-	if got := result.DiffPatch(); len(got) != 0 {
+	if got := changes.DiffPatch(); len(got) != 0 {
 		t.Fatalf("DiffPatch() = %q, want empty", got)
 	}
 
-	snapshotBytes := result.SnapshotJSON()
+	snapshotBytes := snapshot.SnapshotJSON()
 	snapshotBytes[0] = 'x'
-	changedBytes := result.ChangedFilesJSON()
+	changedBytes := changes.ChangedFilesJSON()
 	changedBytes[0] = 'x'
-	diffBytes := result.DiffPatch()
+	diffBytes := changes.DiffPatch()
 	diffBytes = append(diffBytes, 'x')
-	snapshot := result.Snapshot()
-	snapshot.Entries = append(snapshot.Entries, Entry{Path: "mutated"})
-	changes := result.Changes()
-	changes.Scope[0] = "mutated"
-	changes.Changes = append(changes.Changes, Change{Path: "mutated"})
-	if got := string(result.SnapshotJSON()); got != wantSnapshotJSON {
+	changeModel := changes.Changes()
+	changeModel.Scope[0] = "mutated"
+	changeModel.Changes = append(changeModel.Changes, Change{Path: "mutated"})
+	if got := string(snapshot.SnapshotJSON()); got != wantSnapshotJSON {
 		t.Fatal("SnapshotJSON exposed mutable storage")
 	}
-	if got := string(result.ChangedFilesJSON()); got != wantChangedJSON {
+	if got := string(changes.ChangedFilesJSON()); got != wantChangedJSON {
 		t.Fatal("ChangedFilesJSON exposed mutable storage")
 	}
-	if len(result.Snapshot().Entries) != 0 || result.Changes().Scope[0] != "src" || len(result.Changes().Changes) != 0 || len(result.DiffPatch()) != 0 {
-		t.Fatal("Result accessors exposed mutable model storage")
+	if changes.Changes().Scope[0] != "src" || len(changes.Changes().Changes) != 0 || len(changes.DiffPatch()) != 0 {
+		t.Fatal("ChangeResult accessors exposed mutable storage")
 	}
 }
 
@@ -97,19 +99,19 @@ func TestSnapshotDigestUsesReferenceASCIIJSON(t *testing.T) {
 func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 	repository, baseline := basicFixture(t)
 	repository.write("src/base.txt", []byte("same final bytes\n"), 0o644)
-	unstaged, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	unstaged, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe(unstaged) error = %v", err)
+		t.Fatalf("ObserveSnapshot(unstaged) error = %v", err)
 	}
 	repository.git("add", "src/base.txt")
-	staged, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	staged, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe(staged) error = %v", err)
+		t.Fatalf("ObserveSnapshot(staged) error = %v", err)
 	}
 	repository.git("commit", "-q", "-m", "same final bytes")
-	committed, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	committed, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe(committed) error = %v", err)
+		t.Fatalf("ObserveSnapshot(committed) error = %v", err)
 	}
 	if !bytes.Equal(unstaged.SnapshotJSON(), staged.SnapshotJSON()) || !bytes.Equal(staged.SnapshotJSON(), committed.SnapshotJSON()) {
 		t.Fatalf("snapshot identity changed across layers:\nunstaged=%s\nstaged=%s\ncommitted=%s", unstaged.SnapshotJSON(), staged.SnapshotJSON(), committed.SnapshotJSON())
@@ -203,7 +205,7 @@ func TestPhaseAPIsKeepSnapshotsBeforeLayeredChanges(t *testing.T) {
 	}
 }
 
-func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
+func TestPhaseAPIsPreserveLayersAndProductBoundary(t *testing.T) {
 	repository := newFixtureRepository(t, "sha1")
 	repository.write(".gitignore", []byte("ignored.txt\n"), 0o644)
 	repository.write("src/committed.txt", []byte("base committed\n"), 0o644)
@@ -242,11 +244,15 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 		repository.symlink("../missing-target", "src/link")
 	}
 
-	result, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe() error = %v", err)
+		t.Fatalf("ObserveSnapshot() error = %v", err)
 	}
-	changes := result.Changes()
+	observedChanges, err := ObserveChanges(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	if err != nil {
+		t.Fatalf("ObserveChanges() error = %v", err)
+	}
+	changes := observedChanges.Changes()
 	if changes.ScopePassed() {
 		t.Fatal("ScopePassed() = true, want out-of-scope product changes")
 	}
@@ -269,27 +275,30 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 	}
 	findChange(t, changes.ProductChanges, "untracked", "untracked", ".seal/checks.json")
 	for _, path := range []string{".seal/tasks/task.json", ".seal/evidence/run/artifact", ".seal/config.json", ".seal/lessons.md", ".seal/runs.jsonl"} {
-		findChange(t, changes.MetadataChanges, "untracked", "untracked", path)
-		if snapshotEntry(result.Snapshot().Entries, path) != nil {
+		findChange(t, changes.Changes, "untracked", "untracked", path)
+		for _, productView := range [][]Change{changes.ProductChanges, changes.OutOfScopeChanges} {
+			for _, change := range productView {
+				if change.Path == path {
+					t.Fatalf("metadata path %q leaked into product changes", path)
+				}
+			}
+		}
+		if snapshotEntry(snapshot.snapshot.Entries, path) != nil {
 			t.Fatalf("metadata path %q leaked into Source Snapshot", path)
 		}
 	}
-	if snapshotEntry(result.Snapshot().Entries, "ignored.txt") != nil {
+	if snapshotEntry(snapshot.snapshot.Entries, "ignored.txt") != nil {
 		t.Fatal("Git-ignored untracked file leaked into Source Snapshot")
 	}
-	checksEntry := snapshotEntry(result.Snapshot().Entries, ".seal/checks.json")
+	checksEntry := snapshotEntry(snapshot.snapshot.Entries, ".seal/checks.json")
 	if checksEntry == nil || checksEntry.State != "present" {
 		t.Fatalf(".seal/checks.json entry = %#v, want included product source", checksEntry)
 	}
-	*checksEntry.Mode = "mutated"
-	if fresh := snapshotEntry(result.Snapshot().Entries, ".seal/checks.json"); fresh == nil || fresh.Mode == nil || *fresh.Mode == "mutated" {
-		t.Fatal("Snapshot() exposed entry pointer storage")
-	}
 	*rename.PreviousPath = "mutated"
-	if fresh := findChange(t, result.Changes().Changes, "committed", "renamed", "outside/new.txt"); fresh.PreviousPath == nil || *fresh.PreviousPath != "src/old.txt" {
+	if fresh := findChange(t, observedChanges.Changes().Changes, "committed", "renamed", "outside/new.txt"); fresh.PreviousPath == nil || *fresh.PreviousPath != "src/old.txt" {
 		t.Fatal("Changes() exposed previous_path pointer storage")
 	}
-	toolEntry := snapshotEntry(result.Snapshot().Entries, "src/tool.sh")
+	toolEntry := snapshotEntry(snapshot.snapshot.Entries, "src/tool.sh")
 	wantToolMode := "100755"
 	if runtime.GOOS == "windows" {
 		wantToolMode = "100644"
@@ -298,7 +307,7 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 		t.Fatalf("untracked tool entry = %#v, want native mode %s", toolEntry, wantToolMode)
 	}
 	if runtime.GOOS != "windows" {
-		linkEntry := snapshotEntry(result.Snapshot().Entries, "src/link")
+		linkEntry := snapshotEntry(snapshot.snapshot.Entries, "src/link")
 		if linkEntry == nil || linkEntry.Mode == nil || *linkEntry.Mode != "120000" {
 			t.Fatalf("link entry = %#v, want Git symlink", linkEntry)
 		}
@@ -307,10 +316,10 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 			t.Fatalf("link digest = %#v, want target-text digest", linkEntry.SHA256)
 		}
 	}
-	if !json.Valid(result.SnapshotJSON()) || !json.Valid(result.ChangedFilesJSON()) {
+	if !json.Valid(snapshot.SnapshotJSON()) || !json.Valid(observedChanges.ChangedFilesJSON()) {
 		t.Fatal("rendered Source Observation documents are not valid JSON")
 	}
-	patch := result.DiffPatch()
+	patch := observedChanges.DiffPatch()
 	if !bytes.Contains(patch, []byte("GIT binary patch")) || !bytes.Contains(patch, []byte(".seal/checks.json")) {
 		t.Fatalf("DiffPatch() lacks binary/product content:\n%s", patch)
 	}
@@ -321,7 +330,7 @@ func TestObservePreservesLayersAndProductBoundary(t *testing.T) {
 	}
 }
 
-func TestObservePreservesTrackedGitExecutableMode(t *testing.T) {
+func TestPhaseAPIsPreserveTrackedGitExecutableMode(t *testing.T) {
 	repository := newFixtureRepository(t, "sha1")
 	mode := os.FileMode(0o755)
 	if runtime.GOOS == "windows" {
@@ -334,21 +343,25 @@ func TestObservePreservesTrackedGitExecutableMode(t *testing.T) {
 	baseline := strings.TrimSpace(repository.git("rev-parse", "HEAD"))
 
 	repository.write("src/tool.sh", []byte("#!/bin/sh\nexit 1\n"), mode)
-	result, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe() error = %v", err)
+		t.Fatalf("ObserveSnapshot() error = %v", err)
 	}
-	entry := snapshotEntry(result.Snapshot().Entries, "src/tool.sh")
+	entry := snapshotEntry(snapshot.snapshot.Entries, "src/tool.sh")
 	if entry == nil || entry.Mode == nil || *entry.Mode != "100755" {
 		t.Fatalf("tracked executable entry = %#v, want mode 100755", entry)
 	}
-	change := findChange(t, result.Changes().Changes, "unstaged", "modified", "src/tool.sh")
+	observedChanges, err := ObserveChanges(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	if err != nil {
+		t.Fatalf("ObserveChanges() error = %v", err)
+	}
+	change := findChange(t, observedChanges.Changes().Changes, "unstaged", "modified", "src/tool.sh")
 	if change.ModeChanged || change.OldMode == nil || *change.OldMode != "100755" || change.NewMode == nil || *change.NewMode != "100755" {
 		t.Fatalf("tracked executable change = %#v, want content-only 100755 change", change)
 	}
 }
 
-func TestObserveSupportsDetachedLinkedWorktree(t *testing.T) {
+func TestPhaseAPIsSupportDetachedLinkedWorktree(t *testing.T) {
 	repository := newFixtureRepository(t, "sha1")
 	repository.write("src/base.txt", []byte("base\n"), 0o644)
 	baseline := repository.commit("baseline")
@@ -356,16 +369,20 @@ func TestObserveSupportsDetachedLinkedWorktree(t *testing.T) {
 	repository.git("worktree", "add", "-q", "--detach", linked, baseline)
 	t.Cleanup(func() { repository.git("worktree", "remove", "--force", linked) })
 
-	result, err := Observe(Request{CWD: linked, Baseline: baseline, Scope: []string{"src"}})
+	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: linked, Baseline: baseline})
 	if err != nil {
-		t.Fatalf("Observe(linked detached worktree) error = %v", err)
+		t.Fatalf("ObserveSnapshot(linked detached worktree) error = %v", err)
 	}
-	if len(result.Snapshot().Entries) != 0 || len(result.Changes().Changes) != 0 {
-		t.Fatalf("linked clean result = %#v / %#v", result.Snapshot(), result.Changes())
+	changes, err := ObserveChanges(Request{CWD: linked, Baseline: baseline, Scope: []string{"src"}})
+	if err != nil {
+		t.Fatalf("ObserveChanges(linked detached worktree) error = %v", err)
+	}
+	if len(snapshot.snapshot.Entries) != 0 || len(changes.Changes().Changes) != 0 {
+		t.Fatalf("linked clean result = %#v / %#v", snapshot.snapshot, changes.Changes())
 	}
 }
 
-func TestObserveSupportsSHA256Repository(t *testing.T) {
+func TestPhaseAPIsSupportSHA256Repository(t *testing.T) {
 	repository, ok := tryNewFixtureRepository(t, "sha256")
 	if !ok {
 		t.Skip("Git does not support SHA-256 repositories")
@@ -375,8 +392,11 @@ func TestObserveSupportsSHA256Repository(t *testing.T) {
 	if len(baseline) != 64 {
 		t.Fatalf("SHA-256 baseline length = %d, want 64", len(baseline))
 	}
-	if _, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"."}}); err != nil {
-		t.Fatalf("Observe(SHA-256) error = %v", err)
+	if _, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline}); err != nil {
+		t.Fatalf("ObserveSnapshot(SHA-256) error = %v", err)
+	}
+	if _, err := ObserveChanges(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"."}}); err != nil {
+		t.Fatalf("ObserveChanges(SHA-256) error = %v", err)
 	}
 }
 
@@ -421,7 +441,7 @@ func TestObserveRejectsHiddenAndConflictedRepositoryState(t *testing.T) {
 	})
 }
 
-func TestObserveAllowsUnchangedGitlinkAndRejectsMutation(t *testing.T) {
+func TestPhaseAPIsAllowUnchangedGitlinkAndRejectMutation(t *testing.T) {
 	repository := newFixtureRepository(t, "sha1")
 	repository.write("seed.txt", []byte("one\n"), 0o644)
 	first := repository.commit("first")
@@ -430,20 +450,28 @@ func TestObserveAllowsUnchangedGitlinkAndRejectsMutation(t *testing.T) {
 	repository.git("update-index", "--add", "--cacheinfo", "160000,"+first+",vendor/sub")
 	repository.git("commit", "-q", "-m", "gitlink baseline")
 	baseline := strings.TrimSpace(repository.git("rev-parse", "HEAD"))
-
-	result, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"."}})
-	if err != nil {
-		t.Fatalf("Observe(unchanged gitlink) error = %v", err)
+	assertNoChanges := func(context string) {
+		observed, err := ObserveChanges(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"."}})
+		if err != nil || len(observed.Changes().Changes) != 0 {
+			t.Fatalf("ObserveChanges(%s) = %#v, %v; want clean", context, observed.Changes(), err)
+		}
 	}
-	if snapshotEntry(result.Snapshot().Entries, "vendor/sub") != nil {
+
+	snapshot, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	if err != nil {
+		t.Fatalf("ObserveSnapshot(unchanged gitlink) error = %v", err)
+	}
+	if snapshotEntry(snapshot.snapshot.Entries, "vendor/sub") != nil {
 		t.Fatal("unchanged gitlink leaked into product snapshot")
 	}
+	assertNoChanges("unchanged gitlink")
 	if err := os.MkdirAll(filepath.Join(repository.root, "vendor", "sub"), 0o755); err != nil {
 		t.Fatalf("create unchanged gitlink directory: %v", err)
 	}
-	if _, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"."}}); err != nil {
-		t.Fatalf("Observe(unchanged gitlink directory) error = %v", err)
+	if _, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline}); err != nil {
+		t.Fatalf("ObserveSnapshot(unchanged gitlink directory) error = %v", err)
 	}
+	assertNoChanges("unchanged gitlink directory")
 	if err := os.RemoveAll(filepath.Join(repository.root, "vendor", "sub")); err != nil {
 		t.Fatalf("remove unchanged gitlink directory: %v", err)
 	}
@@ -460,14 +488,15 @@ func TestObserveAllowsUnchangedGitlinkAndRejectsMutation(t *testing.T) {
 	assertErrorKind(t, repository.observe(baseline), RepositoryState, "Gitlink")
 }
 
-func TestObserveRejectsInvalidRequest(t *testing.T) {
+func TestPhaseAPIsRejectInvalidRequest(t *testing.T) {
 	repository, baseline := basicFixture(t)
+	_, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline[:12]})
+	assertErrorKind(t, err, InvalidRequest, "")
 	for _, request := range []Request{
-		{CWD: repository.root, Baseline: baseline[:12], Scope: []string{"src"}},
 		{CWD: repository.root, Baseline: baseline, Scope: nil},
 		{CWD: repository.root, Baseline: baseline, Scope: []string{"../src"}},
 	} {
-		_, err := Observe(request)
+		_, err := ObserveChanges(request)
 		assertErrorKind(t, err, InvalidRequest, "")
 	}
 }
@@ -594,7 +623,11 @@ func (repository *fixtureRepository) gitAllowed(accepted []int, arguments ...str
 
 func (repository *fixtureRepository) observe(baseline string) error {
 	repository.t.Helper()
-	_, err := Observe(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
+	_, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	if err != nil {
+		return err
+	}
+	_, err = ObserveChanges(Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}})
 	return err
 }
 

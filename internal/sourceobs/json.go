@@ -34,9 +34,7 @@ func buildSnapshot(baseline string, entries []Entry) (Snapshot, []byte, error) {
 	return snapshot, artifact, nil
 }
 
-// renderChangedFiles produces the exact changed-files/v1 artifact. The
-// derived ChangeSet views are intentionally omitted: they are decision aids,
-// not fields in the persisted Reference document.
+// renderChangedFiles produces the exact changed-files/v1 artifact.
 func renderChangedFiles(changes ChangeSet) ([]byte, error) {
 	writer := jsonWriter{pretty: true}
 	writer.beginObject()

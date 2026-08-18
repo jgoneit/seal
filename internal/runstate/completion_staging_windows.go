@@ -12,10 +12,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func createPrivateCompletionTemp(root *os.Root, name string) (*os.File, fs.FileInfo, error) {
-	return createPrivateCompletionTempWithHooks(root, name, completionTempHooks{})
-}
-
 func createPrivateCompletionTempWithHooks(root *os.Root, name string, hooks completionTempHooks) (*os.File, fs.FileInfo, error) {
 	if err := validateRelativeName(name); err != nil {
 		return nil, nil, err

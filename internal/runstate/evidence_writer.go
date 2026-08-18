@@ -290,7 +290,7 @@ func (writer *evidenceWriter) writeManifest(evidenceFiles []string) error {
 		"run_id":          writer.runID,
 		"files":           records,
 		"evidence_sha256": hex.EncodeToString(digest[:]),
-		"created_at":      runTimestampNow(),
+		"created_at":      runTimestamp(time.Now()),
 	}
 	encoded, err := renderEvidenceJSON(manifest)
 	if err != nil {
@@ -402,12 +402,6 @@ func (writer *evidenceWriter) abort() error {
 	}
 	return result
 }
-
-func runTimestampNow() string {
-	return runTimestamp(timeNow())
-}
-
-var timeNow = func() time.Time { return time.Now() }
 
 func validateRelativeName(name string) error {
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\\`) {

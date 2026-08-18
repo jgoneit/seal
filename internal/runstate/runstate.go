@@ -1,6 +1,5 @@
 // Package runstate creates, validates, and projects explicitly identified
-// Acceptance Runs. It never infers a latest identity, repairs work, or invokes
-// another Toolkit module.
+// Acceptance Runs.
 package runstate
 
 import (
@@ -14,10 +13,9 @@ import (
 )
 
 const (
-	taskSchemaVersion       = 1
-	evidenceSchemaVersion   = 2
-	summarySchemaVersion    = 1
-	defaultCheckTimeoutSecs = 300
+	taskSchemaVersion     = 1
+	evidenceSchemaVersion = 2
+	summarySchemaVersion  = 1
 )
 
 // ErrorKind is the stable public category of a handled Run query error.
@@ -123,12 +121,6 @@ type ScopeViolation struct {
 	PreviousPath *string `json:"previous_path"`
 	Source       string  `json:"source"`
 	Status       string  `json:"status"`
-}
-
-// MarshalJSON preserves escaped lone-surrogate paths while retaining the
-// reference's sorted public field order.
-func (summary Summary) MarshalJSON() ([]byte, error) {
-	return canonicalJSONMode(summary.document(), true, false)
 }
 
 // ReferenceJSON returns the exact byte-oriented JSON projection used by the

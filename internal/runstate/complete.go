@@ -18,8 +18,7 @@ const (
 	completionTimestamp     = "2006-01-02T15:04:05.000000Z"
 )
 
-// CompletionRun identifies one immutable completion record. It exposes only
-// the legacy success projection needed by the later CLI boundary.
+// CompletionRun identifies one immutable completion record.
 type CompletionRun struct {
 	TaskID         string
 	RunID          string
@@ -47,7 +46,6 @@ type completionPolicyError struct {
 func (e *completionPolicyError) Error() string { return e.message }
 
 // CompletionExitCode maps a handled Complete error to its stable CLI exit.
-// It is deliberately narrower than exporting completion policy internals.
 func CompletionExitCode(err error) (int, bool) {
 	var policy *completionPolicyError
 	if errors.As(err, &policy) {
@@ -67,9 +65,8 @@ func CompletionExitCode(err error) (int, bool) {
 	}
 }
 
-// Complete evaluates one exact, validated Run against the current source and
-// records immutable Basic-profile acceptance. It never reruns checks, reads a
-// Verdict, repairs Evidence, or selects another Run.
+// Complete reevaluates current source and records immutable Basic-profile
+// acceptance for one exact Run without consuming a Verdict or rerunning checks.
 func Complete(cwd, taskID, runID string) (*CompletionRun, error) {
 	return completeWithHooks(cwd, taskID, runID, completeHooks{})
 }

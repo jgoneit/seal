@@ -27,7 +27,7 @@ const (
 var maxTimerSeconds = big.NewInt(math.MaxInt64 / int64(time.Second))
 
 // Definition is one already-resolved saved Task check. TimeoutSeconds is nil
-// when the reference default applies. Run clones all mutable fields before use.
+// when the reference default applies. RunRooted clones all mutable fields before use.
 type Definition struct {
 	Name           string
 	Argv           []string
@@ -35,9 +35,8 @@ type Definition struct {
 	TimeoutSeconds *big.Int
 }
 
-// Result is the complete persisted model for one attempted check. Field order
-// follows the reference's sorted JSON representation. EffectiveTimeout remains
-// arbitrary precision and marshals as an unquoted JSON integer.
+// Result records one attempted check; EffectiveTimeout remains an unquoted,
+// arbitrary-precision JSON integer.
 type Result struct {
 	Argv             []string `json:"argv"`
 	CWD              string   `json:"cwd"`
@@ -69,26 +68,6 @@ type InfrastructureError struct {
 
 func (e *InfrastructureError) Error() string { return e.message }
 func (e *InfrastructureError) Unwrap() error { return e.cause }
-
-// Run executes checks sequentially in saved order. Every child receives the
-// repository root as cwd, the caller's environment and stdin, and raw private
-// stdout/stderr files below evidenceDirectory/checks.
-func Run(checks []Definition, repositoryRoot, evidenceDirectory string) ([]Result, error) {
-	workingDirectory, err := resolveDirectory(repositoryRoot, "check working directory")
-	if err != nil {
-		return nil, err
-	}
-	evidenceRoot, err := resolveDirectory(evidenceDirectory, "check Evidence directory")
-	if err != nil {
-		return nil, err
-	}
-	root, err := os.OpenRoot(evidenceRoot)
-	if err != nil {
-		return nil, infrastructure("Could not open check Evidence directory.", err)
-	}
-	defer root.Close()
-	return runRooted(checks, workingDirectory, root)
-}
 
 // RunRooted executes checks while creating every log relative to an already
 // opened Evidence root. The caller retains ownership of evidenceRoot. This is

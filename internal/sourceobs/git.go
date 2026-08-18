@@ -308,13 +308,10 @@ func collectChanges(context repositoryContext, scope []string) (ChangeSet, error
 	}
 	for _, change := range changes {
 		if isMetadataChange(change) {
-			collection.MetadataChanges = append(collection.MetadataChanges, cloneChanges([]Change{change})[0])
 			continue
 		}
 		collection.ProductChanges = append(collection.ProductChanges, cloneChanges([]Change{change})[0])
-		if change.InScope {
-			collection.InScopeChanges = append(collection.InScopeChanges, cloneChanges([]Change{change})[0])
-		} else {
+		if !change.InScope {
 			collection.OutOfScopeChanges = append(collection.OutOfScopeChanges, cloneChanges([]Change{change})[0])
 		}
 	}
