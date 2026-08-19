@@ -82,6 +82,23 @@ Seal does not implement Bundle, Verdict, or Reviewer behavior. It does not
 infer a latest identity, retry, repair, rerun checks during Completion, or
 invoke another Toolkit module, and it has no `.harness` fallback.
 
+## Codex Plugin
+
+This checkout is also a skills-only local Codex Plugin. The Plugin makes the
+documented CLI available to Native Agents; it does not bundle the `seal` binary
+or add another Acceptance authority. After the Plugin and CLI are installed,
+`@Seal` selects it explicitly. Its single Skill may also be selected for a
+concrete implementation request when the target repository already opts in
+with `.seal/checks.json`. Planning, explanation, read-only review, and
+unconfigured repositories do not activate Seal implicitly.
+
+The Native Agent still performs the work normally. The Skill creates the Task
+before implementation, carries exact Task and Run identities, and reports
+`verify`, `run show`, and Basic `complete` as distinct results. It does not add
+approval stages, retry or repair loops, Reviewer behavior, or workflow state.
+Start a new Codex Task after installing or updating the Plugin so its Skill is
+loaded.
+
 To exercise the candidate from a Go checkout:
 
 ```bash
