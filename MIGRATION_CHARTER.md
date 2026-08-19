@@ -152,7 +152,8 @@ command and its conformance tests.
 
 ## Explicit exclusions
 
-The migration does not bring over Python packaging, private helpers, Codex
-Plugin or Skill behavior, UI flows, provider integrations, workflow engines,
-automatic repair, or historical phase machinery. It does not add Toolkit
-management responsibilities to Seal.
+The migration does not bring over Python packaging, private helpers, Legacy
+Codex Plugin or Skill behavior, UI flows, provider integrations, workflow
+engines, automatic repair, or historical phase machinery. The thin Go Codex
+adapter only exposes the documented CLI to Native Agents; it adds no Acceptance
+semantics or Toolkit management responsibility to Seal.

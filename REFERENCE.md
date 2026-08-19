@@ -51,7 +51,8 @@ The Go codebase does not copy or mirror:
 
 - Python package, class, private-helper, or packaging structure
 - the Python test suite as implementation scaffolding
-- Codex Plugin, Skill, marketplace, cache, or UI workflow behavior
+- Legacy Codex Plugin or Skill workflow behavior, marketplace or cache state,
+  or UI behavior
 - historical planning documents or compatibility branches
 - provider SDKs or automatic reviewer execution
 - Knowledge or Security functionality
