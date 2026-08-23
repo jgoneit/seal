@@ -32,7 +32,9 @@ repository rather than inventing policy.
 
 Before any Seal command:
 
-1. Resolve the exact Git repository root.
+1. Resolve the exact Git repository root. Use that root as the working
+   directory for every repository-bound `task create`, `task show`, `verify`,
+   `run show`, and `complete` invocation.
 2. Prefer `seal` on `PATH`; otherwise accept the documented installer path
    (`$HOME/.local/bin/seal` on Linux or macOS, or
    `%LOCALAPPDATA%\Programs\Seal\bin\seal.exe` on Windows) only when it is an
@@ -45,8 +47,11 @@ briefly that Seal was skipped and continue the requested work. On explicit use,
 report the prerequisite failure before proceeding without Seal.
 
 For a new Task, also read `.seal/checks.json`, `HEAD`, and worktree status.
-Preserve existing user changes. A missing catalog blocks Task creation but not
-an exact `task show` or `run show` query.
+Dirty worktrees are supported, but create the Task only when all existing
+product changes belong to its requested outcome and Scope. If attribution is
+unclear, skip implicit use or ask before explicit Task creation; never clean,
+reset, stash, or commit existing work merely to activate Seal. A missing
+catalog blocks Task creation but not an exact `task show` or `run show` query.
 
 ## Change workflow
 
@@ -75,7 +80,8 @@ Report Task creation, Evidence recording, mechanical result, and Completion as
 separate facts. A failed Run remains Evidence. The Native Agent may continue
 the authorized implementation and verify a later completion candidate, but it
 must preserve every Run and use each new exact Run ID. A material change to the
-Task objective, Scope, checks, or verifier setting requires a new Task ID.
+Task objective, type, Scope, checks, risk, or verifier setting requires a new
+Task ID.
 
 For read-only requests, use only exact identities supplied by the user or
 retained from the current task. Never infer a latest Task or Run.
