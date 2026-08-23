@@ -8,13 +8,15 @@ These instructions apply to the entire repository.
 - Native Agents own planning, implementation, and execution.
 - Seal exposes deterministic state and decisions; it does not own workflow
   transitions or invoke other Toolkit modules.
+- The Codex Plugin is a thin adapter over the documented CLI. It must not make
+  Acceptance decisions itself or take workflow authority from Native Agents.
 - The frozen Python implementation identified in `REFERENCE.md` is the
   behavioral reference until an explicit canonical transition is approved.
 
 ## Migration rules
 
 - Reproduce external contracts and outcomes; do not translate Python package,
-  class, helper, Plugin, Skill, or test-suite structure.
+  class, helper, Legacy Plugin, Legacy Skill, or test-suite structure.
 - Justify new behavior with a conformance scenario from the reference.
 - Do not add new product features during compatibility migration.
 - Do not infer a latest Task or Run, retry or repair work, execute reviewers,
