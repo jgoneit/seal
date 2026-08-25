@@ -1,7 +1,12 @@
 package runstate
 
 import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +33,51 @@ func safeRunPath(value any, context string) (string, error) {
 }
 
 func readArtifact(runDirectory, relativePath string) ([]byte, error) {
+	return readArtifactContext(context.Background(), runDirectory, relativePath)
+}
+
+func readArtifactContext(ctx context.Context, runDirectory, relativePath string) ([]byte, error) {
+	if err := artifactContextError(ctx); err != nil {
+		return nil, err
+	}
+	file, err := openArtifact(runDirectory, relativePath)
+	if err != nil {
+		return nil, err
+	}
+	var contents bytes.Buffer
+	buffer := make([]byte, 64*1024)
+	var readError error
+	for {
+		if err := artifactContextError(ctx); err != nil {
+			readError = err
+			break
+		}
+		count, err := file.Read(buffer)
+		if count > 0 {
+			_, _ = contents.Write(buffer[:count])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			readError = &EvidenceError{message: "unreadable"}
+			break
+		}
+	}
+	closeError := file.Close()
+	if readError != nil {
+		return nil, readError
+	}
+	if closeError != nil {
+		return nil, &EvidenceError{message: "unreadable"}
+	}
+	if err := artifactContextError(ctx); err != nil {
+		return nil, err
+	}
+	return contents.Bytes(), nil
+}
+
+func openArtifact(runDirectory, relativePath string) (*os.File, error) {
 	filesystemRelative, err := surrogateEscapeFilesystemPath(relativePath)
 	if err != nil {
 		return nil, &EvidenceError{message: "unsafe"}
@@ -49,11 +99,11 @@ func readArtifact(runDirectory, relativePath string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, &EvidenceError{message: "unsafe"}
 	}
-	contents, err := os.ReadFile(resolved)
+	file, err := os.Open(resolved)
 	if err != nil {
 		return nil, &EvidenceError{message: "unreadable"}
 	}
-	return contents, nil
+	return file, nil
 }
 
 func surrogateEscapeFilesystemPath(logical string) (string, error) {
@@ -75,7 +125,11 @@ func surrogateEscapeFilesystemPath(logical string) (string, error) {
 }
 
 func readRequiredArtifact(runDirectory, relativePath string) ([]byte, error) {
-	contents, err := readArtifact(runDirectory, relativePath)
+	return readRequiredArtifactContext(context.Background(), runDirectory, relativePath)
+}
+
+func readRequiredArtifactContext(ctx context.Context, runDirectory, relativePath string) ([]byte, error) {
+	contents, err := readArtifactContext(ctx, runDirectory, relativePath)
 	if err == nil {
 		return contents, nil
 	}
@@ -91,4 +145,74 @@ func readRequiredArtifact(runDirectory, relativePath string) ([]byte, error) {
 	default:
 		return nil, &EvidenceError{message: fmt.Sprintf("Could not read evidence file: %s.", relativePath)}
 	}
+}
+
+func artifactContextError(ctx context.Context) error {
+	if ctx == nil {
+		return context.Canceled
+	}
+	return ctx.Err()
+}
+
+func hashArtifactContext(ctx context.Context, runDirectory, relativePath string) (int64, string, error) {
+	if err := artifactContextError(ctx); err != nil {
+		return 0, "", err
+	}
+	file, err := openArtifact(runDirectory, relativePath)
+	if err != nil {
+		return 0, "", err
+	}
+	digest := sha256.New()
+	buffer := make([]byte, 64*1024)
+	var size int64
+	var readError error
+	for {
+		if err := artifactContextError(ctx); err != nil {
+			readError = err
+			break
+		}
+		count, err := file.Read(buffer)
+		if count > 0 {
+			_, _ = digest.Write(buffer[:count])
+			size += int64(count)
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			readError = &EvidenceError{message: "unreadable"}
+			break
+		}
+	}
+	closeError := file.Close()
+	if readError != nil {
+		return 0, "", readError
+	}
+	if closeError != nil {
+		return 0, "", &EvidenceError{message: "unreadable"}
+	}
+	if err := artifactContextError(ctx); err != nil {
+		return 0, "", err
+	}
+	return size, hex.EncodeToString(digest.Sum(nil)), nil
+}
+
+func hashBytesContext(ctx context.Context, contents []byte) (string, error) {
+	digest := sha256.New()
+	const chunkSize = 64 * 1024
+	for len(contents) > 0 {
+		if err := artifactContextError(ctx); err != nil {
+			return "", err
+		}
+		chunk := contents
+		if len(chunk) > chunkSize {
+			chunk = chunk[:chunkSize]
+		}
+		_, _ = digest.Write(chunk)
+		contents = contents[len(chunk):]
+	}
+	if err := artifactContextError(ctx); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }

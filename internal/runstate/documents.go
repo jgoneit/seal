@@ -1,6 +1,7 @@
 package runstate
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -145,23 +146,30 @@ func parseTaskFacts(task jsonObject, taskID, context string) (taskFacts, error) 
 }
 
 func validateDocuments(runDirectory string, task jsonObject, taskID, runID string) (validatedDocuments, error) {
-	evidenceTask, err := readEvidenceJSON(runDirectory, "task.json")
+	return validateDocumentsContext(context.Background(), runDirectory, task, taskID, runID)
+}
+
+func validateDocumentsContext(ctx context.Context, runDirectory string, task jsonObject, taskID, runID string) (validatedDocuments, error) {
+	if err := artifactContextError(ctx); err != nil {
+		return validatedDocuments{}, err
+	}
+	evidenceTask, err := readEvidenceJSONContext(ctx, runDirectory, "task.json")
 	if err != nil {
 		return validatedDocuments{}, err
 	}
-	changedDocument, err := readEvidenceJSON(runDirectory, "changed-files.json")
+	changedDocument, err := readEvidenceJSONContext(ctx, runDirectory, "changed-files.json")
 	if err != nil {
 		return validatedDocuments{}, err
 	}
-	checksDocument, err := readEvidenceJSON(runDirectory, "checks.json")
+	checksDocument, err := readEvidenceJSONContext(ctx, runDirectory, "checks.json")
 	if err != nil {
 		return validatedDocuments{}, err
 	}
-	verificationDocument, err := readEvidenceJSON(runDirectory, "verification.json")
+	verificationDocument, err := readEvidenceJSONContext(ctx, runDirectory, "verification.json")
 	if err != nil {
 		return validatedDocuments{}, err
 	}
-	if _, err := readRequiredArtifact(runDirectory, "diff.patch"); err != nil {
+	if _, err := readRequiredArtifactContext(ctx, runDirectory, "diff.patch"); err != nil {
 		return validatedDocuments{}, err
 	}
 
@@ -179,11 +187,15 @@ func validateDocuments(runDirectory string, task jsonObject, taskID, runID strin
 		return validatedDocuments{}, err
 	}
 
-	verification, err := validateVerification(runDirectory, verificationDocument, taskID, runID)
+	if err := artifactContextError(ctx); err != nil {
+		return validatedDocuments{}, err
+	}
+	verification, err := validateVerification(ctx, runDirectory, verificationDocument, taskID, runID)
 	if err != nil {
 		return validatedDocuments{}, err
 	}
 	checkSummaries, requiredChecksPass, logPaths, err := validateChecks(
+		ctx,
 		runDirectory,
 		taskDefinition,
 		checksDocument,
@@ -196,7 +208,8 @@ func validateDocuments(runDirectory string, task jsonObject, taskID, runID strin
 	if err != nil {
 		return validatedDocuments{}, err
 	}
-	sourceStable, err := validateSourceBinding(
+	sourceStable, err := validateSourceBindingContext(
+		ctx,
 		runDirectory,
 		taskDefinition.baseline,
 		changedDocument,
@@ -239,7 +252,11 @@ func validateDocuments(runDirectory string, task jsonObject, taskID, runID strin
 }
 
 func readEvidenceJSON(runDirectory, relativePath string) (jsonObject, error) {
-	contents, err := readRequiredArtifact(runDirectory, relativePath)
+	return readEvidenceJSONContext(context.Background(), runDirectory, relativePath)
+}
+
+func readEvidenceJSONContext(ctx context.Context, runDirectory, relativePath string) (jsonObject, error) {
+	contents, err := readRequiredArtifactContext(ctx, runDirectory, relativePath)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +273,10 @@ func readEvidenceJSON(runDirectory, relativePath string) (jsonObject, error) {
 	return value, nil
 }
 
-func validateVerification(runDirectory string, document jsonObject, taskID, runID string) (verificationFacts, error) {
+func validateVerification(ctx context.Context, runDirectory string, document jsonObject, taskID, runID string) (verificationFacts, error) {
+	if err := artifactContextError(ctx); err != nil {
+		return verificationFacts{}, err
+	}
 	if !integerEquals(document["schema_version"], evidenceSchemaVersion) {
 		return verificationFacts{}, &EvidenceError{message: "verification.json has an unsupported schema_version."}
 	}
@@ -303,6 +323,9 @@ func validateVerification(runDirectory string, document jsonObject, taskID, runI
 	}
 	files := make(map[string]string, len(rawFiles))
 	for index, value := range rawFiles {
+		if err := artifactContextError(ctx); err != nil {
+			return verificationFacts{}, err
+		}
 		path, err := safeRunPath(value, fmt.Sprintf("verification.json evidence_files[%d]", index))
 		if err != nil {
 			return verificationFacts{}, err
@@ -311,7 +334,7 @@ func validateVerification(runDirectory string, document jsonObject, taskID, runI
 			return verificationFacts{}, &EvidenceError{message: fmt.Sprintf("verification.json evidence_files[%d] duplicates '%s'.", index, path)}
 		}
 		files[path] = path
-		if _, err := readRequiredArtifact(runDirectory, path); err != nil {
+		if _, err := readRequiredArtifactContext(ctx, runDirectory, path); err != nil {
 			return verificationFacts{}, err
 		}
 	}
@@ -329,6 +352,7 @@ func validateVerification(runDirectory string, document jsonObject, taskID, runI
 }
 
 func validateChecks(
+	ctx context.Context,
 	runDirectory string,
 	task taskFacts,
 	document jsonObject,
@@ -356,6 +380,9 @@ func validateChecks(
 	logPaths := make([]string, 0, 2*len(recorded))
 	requiredPass := true
 	for index, rawRecord := range recorded {
+		if err := artifactContextError(ctx); err != nil {
+			return nil, false, nil, err
+		}
 		context := fmt.Sprintf("checks.json checks[%d]", index)
 		record, ok := rawRecord.(map[string]any)
 		if !ok {
@@ -417,7 +444,7 @@ func validateChecks(
 				return nil, false, nil, &EvidenceError{message: context + "." + field + " duplicates an existing evidence path '" + path + "'."}
 			}
 			seen[path] = struct{}{}
-			if _, err := readRequiredArtifact(runDirectory, path); err != nil {
+			if _, err := readRequiredArtifactContext(ctx, runDirectory, path); err != nil {
 				return nil, false, nil, err
 			}
 			logPaths = append(logPaths, path)
@@ -433,6 +460,9 @@ func validateChecks(
 		if task.checks[index].required && !passed {
 			requiredPass = false
 		}
+	}
+	if err := artifactContextError(ctx); err != nil {
+		return nil, false, nil, err
 	}
 	return summaries, requiredPass, logPaths, nil
 }

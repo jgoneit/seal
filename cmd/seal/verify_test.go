@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +93,100 @@ func TestRunCLIVerifyMapsInputAndRepositoryFailures(t *testing.T) {
 				t.Fatalf("stdout = %q, stderr = %q", stdout.String(), stderr.String())
 			}
 		})
+	}
+}
+
+func TestRunCLIVerifyRejectsSavedTimeoutAboveBasicProfileMaximum(t *testing.T) {
+	fixture := createContractNewFixture(t, true)
+	catalog := createContractValidCatalog()
+	check := catalog["checks"].([]any)[0].(map[string]any)
+	check["timeout_seconds"] = json.Number("301")
+	createContractWriteJSON(t, createContractCatalogPath(fixture.repository), catalog)
+	created := createContractRun(t, fixture.repository, "task", "create", "--file", fixture.input)
+	if created.code != 0 {
+		t.Fatalf("task create failed: %s", created.stderr)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := runCLI(fixture.repository, []string{"verify", createContractTaskID}, &stdout, &stderr)
+	want := "error: saved Task snapshot checks[0].timeout_seconds must be at most 300 seconds.\n"
+	if code != 2 || stdout.Len() != 0 || stderr.String() != want {
+		t.Fatalf("verify = code %d, stdout %q, stderr %q; want exit 2 and %q", code, stdout.String(), stderr.String(), want)
+	}
+	assertVerifyHasNoRunResidue(t, fixture.repository)
+}
+
+func TestRunCLIVerifyMapsStreamLimitToExitThreeWithoutOutputOrRun(t *testing.T) {
+	fixture := createContractNewFixture(t, true)
+	catalog := createContractValidCatalog()
+	check := catalog["checks"].([]any)[0].(map[string]any)
+	check["argv"] = []any{
+		os.Args[0], "-test.run=^TestRunCLIVerifyOutputHelper$", "--", strconv.Itoa(8*1024*1024 + 1),
+	}
+	check["timeout_seconds"] = json.Number("30")
+	createContractWriteJSON(t, createContractCatalogPath(fixture.repository), catalog)
+	created := createContractRun(t, fixture.repository, "task", "create", "--file", fixture.input)
+	if created.code != 0 {
+		t.Fatalf("task create failed: %s", created.stderr)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := runCLI(fixture.repository, []string{"verify", createContractTaskID}, &stdout, &stderr)
+	want := "error: checks[0].stdout exceeded the 8388608-byte safety limit.\n"
+	if code != 3 || stdout.Len() != 0 || stderr.String() != want {
+		t.Fatalf("verify = code %d, stdout %q, stderr %q; want exit 3 and %q", code, stdout.String(), stderr.String(), want)
+	}
+	assertVerifyHasNoRunResidue(t, fixture.repository)
+}
+
+func TestRunCLIVerifyOutputHelper(t *testing.T) {
+	separator := -1
+	for index, argument := range os.Args {
+		if argument == "--" {
+			separator = index
+			break
+		}
+	}
+	if separator < 0 || separator+1 >= len(os.Args) {
+		return
+	}
+	remaining, err := strconv.Atoi(os.Args[separator+1])
+	if err != nil || remaining < 0 {
+		os.Exit(96)
+	}
+	chunk := make([]byte, 64*1024)
+	for remaining > 0 {
+		length := len(chunk)
+		if remaining < length {
+			length = remaining
+		}
+		written, err := os.Stdout.Write(chunk[:length])
+		if err != nil {
+			os.Exit(96)
+		}
+		remaining -= written
+	}
+	os.Exit(0)
+}
+
+func assertVerifyHasNoRunResidue(t *testing.T, repository string) {
+	t.Helper()
+	parent := filepath.Join(repository, ".seal", "evidence", createContractTaskID)
+	entries, err := os.ReadDir(parent)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, len(entries))
+		for index, entry := range entries {
+			names[index] = entry.Name()
+		}
+		t.Fatalf("unexpected verification residue: %v", names)
 	}
 }
 

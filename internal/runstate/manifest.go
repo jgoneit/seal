@@ -1,8 +1,7 @@
 package runstate
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -18,8 +17,15 @@ type manifestRecord struct {
 }
 
 func validateManifest(runDirectory, taskID, runID string, expectedFiles []string) (string, error) {
-	contents, err := readArtifact(runDirectory, "run-manifest.json")
+	return validateManifestContext(context.Background(), runDirectory, taskID, runID, expectedFiles)
+}
+
+func validateManifestContext(ctx context.Context, runDirectory, taskID, runID string, expectedFiles []string) (string, error) {
+	contents, err := readArtifactContext(ctx, runDirectory, "run-manifest.json")
 	if err != nil {
+		if _, ok := err.(*EvidenceError); !ok {
+			return "", err
+		}
 		return "", &EvidenceError{message: fmt.Sprintf("run-manifest.json is missing or unreadable for Evidence Run '%s'.", runDirectory)}
 	}
 	document, err := decodeJSONObject(contents)
@@ -54,13 +60,22 @@ func validateManifest(runDirectory, taskID, runID string, expectedFiles []string
 		return "", &EvidenceError{message: "run-manifest.json run_id does not match the requested Run id."}
 	}
 
-	records, err := validateManifestRecords(document["files"].([]any), expectedFiles)
+	if err := artifactContextError(ctx); err != nil {
+		return "", err
+	}
+	records, err := validateManifestRecordsContext(ctx, document["files"].([]any), expectedFiles)
 	if err != nil {
 		return "", err
 	}
 	for _, record := range records {
-		contents, err := readArtifact(runDirectory, record.path)
+		if err := artifactContextError(ctx); err != nil {
+			return "", err
+		}
+		size, digest, err := hashArtifactContext(ctx, runDirectory, record.path)
 		if err != nil {
+			if _, ok := err.(*EvidenceError); !ok {
+				return "", err
+			}
 			detail := "Could not read Evidence file: "
 			if evidence, ok := err.(*EvidenceError); ok {
 				switch evidence.message {
@@ -73,17 +88,19 @@ func validateManifest(runDirectory, taskID, runID string, expectedFiles []string
 			return "", &EvidenceError{message: detail + record.path + "."}
 		}
 		recordedSize, _ := new(big.Int).SetString(string(record.sizeBytes), 10)
-		if recordedSize.Cmp(big.NewInt(int64(len(contents)))) != 0 {
+		if recordedSize.Cmp(big.NewInt(size)) != 0 {
 			return "", &EvidenceError{message: "run-manifest.json size mismatch for " + record.path + "."}
 		}
-		digest := sha256.Sum256(contents)
-		if record.sha256 != hex.EncodeToString(digest[:]) {
+		if record.sha256 != digest {
 			return "", &EvidenceError{message: "run-manifest.json hash mismatch for " + record.path + "."}
 		}
 	}
 
 	payloadRecords := make([]any, len(records))
 	for index, record := range records {
+		if err := artifactContextError(ctx); err != nil {
+			return "", err
+		}
 		payloadRecords[index] = record.document
 	}
 	payload := map[string]any{
@@ -96,8 +113,10 @@ func validateManifest(runDirectory, taskID, runID string, expectedFiles []string
 	if err != nil {
 		return "", &EvidenceError{message: "run-manifest.json evidence_sha256 could not be recomputed."}
 	}
-	digest := sha256.Sum256(canonical)
-	computed := hex.EncodeToString(digest[:])
+	computed, err := hashBytesContext(ctx, canonical)
+	if err != nil {
+		return "", err
+	}
 	if recordedEvidenceSHA != computed {
 		return "", &EvidenceError{message: "run-manifest.json evidence_sha256 does not match its file records."}
 	}
@@ -105,14 +124,24 @@ func validateManifest(runDirectory, taskID, runID string, expectedFiles []string
 }
 
 func validateManifestRecords(raw []any, expectedFiles []string) ([]manifestRecord, error) {
+	return validateManifestRecordsContext(context.Background(), raw, expectedFiles)
+}
+
+func validateManifestRecordsContext(ctx context.Context, raw []any, expectedFiles []string) ([]manifestRecord, error) {
 	expectedSet := make(map[string]struct{}, len(expectedFiles))
 	for _, path := range expectedFiles {
+		if err := artifactContextError(ctx); err != nil {
+			return nil, err
+		}
 		expectedSet[path] = struct{}{}
 	}
 	records := make([]manifestRecord, len(raw))
 	seen := make(map[string]struct{}, len(raw))
 	paths := make([]string, len(raw))
 	for index, value := range raw {
+		if err := artifactContextError(ctx); err != nil {
+			return nil, err
+		}
 		context := fmt.Sprintf("run-manifest.json files[%d]", index)
 		document, ok := value.(map[string]any)
 		if !ok {
@@ -142,6 +171,9 @@ func validateManifestRecords(raw []any, expectedFiles []string) ([]manifestRecor
 	}
 	missing := make([]string, 0)
 	for path := range expectedSet {
+		if err := artifactContextError(ctx); err != nil {
+			return nil, err
+		}
 		if _, ok := seen[path]; !ok {
 			missing = append(missing, path)
 		}
@@ -152,6 +184,9 @@ func validateManifestRecords(raw []any, expectedFiles []string) ([]manifestRecor
 	}
 	unknown := make([]string, 0)
 	for path := range seen {
+		if err := artifactContextError(ctx); err != nil {
+			return nil, err
+		}
 		if _, ok := expectedSet[path]; !ok {
 			unknown = append(unknown, path)
 		}

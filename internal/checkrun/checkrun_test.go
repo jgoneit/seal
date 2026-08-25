@@ -2,6 +2,7 @@ package checkrun
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestRunRecordsReferenceContractAndContinues(t *testing.T) {
@@ -178,7 +180,7 @@ func TestRunRootedKeepsLogsInRetainedEvidenceDirectory(t *testing.T) {
 	}
 }
 
-func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
+func TestRunUsesClosedStdinAndPreservesBoundedRawLogs(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
 	evidenceRoot := openTestRoot(t, evidence)
@@ -205,8 +207,8 @@ func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := readBytes(t, filepath.Join(evidence, filepath.FromSlash(results[0].StdoutPath))); !bytes.Equal(got, input) {
-		t.Fatalf("stdin bytes = %v", got)
+	if got := readBytes(t, filepath.Join(evidence, filepath.FromSlash(results[0].StdoutPath))); len(got) != 0 {
+		t.Fatalf("closed stdin produced bytes %v", got)
 	}
 	large := readBytes(t, filepath.Join(evidence, filepath.FromSlash(results[1].StdoutPath)))
 	if len(large) != 2*1024*1024 {
@@ -229,33 +231,30 @@ func TestRunInheritsStdinAndPreservesRawUnboundedLogs(t *testing.T) {
 	}
 }
 
-func TestRunPreservesArbitraryPrecisionTimeout(t *testing.T) {
+func TestRunAcceptsMaximumTimeout(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
 	evidenceRoot := openTestRoot(t, evidence)
 	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
-	huge, ok := new(big.Int).SetString("100000000000000000000000000000000000000000000000001", 10)
-	if !ok {
-		t.Fatal("could not build huge timeout")
-	}
+	maximum := big.NewInt(MaxTimeoutSeconds)
 
 	results, err := RunRooted([]Definition{{
-		Name:           "huge timeout",
+		Name:           "maximum timeout",
 		Argv:           helperArgv("exit", "0"),
 		Required:       true,
-		TimeoutSeconds: huge,
+		TimeoutSeconds: maximum,
 	}}, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if results[0].EffectiveTimeout.Cmp(huge) != 0 {
+	if results[0].EffectiveTimeout.Cmp(maximum) != 0 {
 		t.Fatalf("timeout = %s", results[0].EffectiveTimeout)
 	}
 	encoded, err := json.Marshal(results[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `"effective_timeout":` + huge.String()
+	want := `"effective_timeout":` + maximum.String()
 	if !bytes.Contains(encoded, []byte(want)) {
 		t.Fatalf("encoded timeout is not an exact JSON integer: %s", encoded)
 	}
@@ -273,6 +272,7 @@ func TestRunRejectsInvalidDefinitions(t *testing.T) {
 		{name: "argument", definition: Definition{Name: "bad", Argv: []string{"ok", ""}}, message: "checks[0].argv[1] must be a non-empty string."},
 		{name: "zero timeout", definition: Definition{Name: "bad", Argv: []string{"ok"}, TimeoutSeconds: big.NewInt(0)}, message: "checks[0].timeout_seconds must be a positive integer."},
 		{name: "negative timeout", definition: Definition{Name: "bad", Argv: []string{"ok"}, TimeoutSeconds: big.NewInt(-1)}, message: "checks[0].timeout_seconds must be a positive integer."},
+		{name: "over maximum timeout", definition: Definition{Name: "bad", Argv: []string{"ok"}, TimeoutSeconds: big.NewInt(MaxTimeoutSeconds + 1)}, message: "checks[0].timeout_seconds must be at most 300 seconds."},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -286,6 +286,122 @@ func TestRunRejectsInvalidDefinitions(t *testing.T) {
 				t.Fatalf("error = %q, want %q", err, test.message)
 			}
 		})
+	}
+}
+
+func TestRunPrevalidatesEveryDefinitionBeforeExecution(t *testing.T) {
+	repository := t.TempDir()
+	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
+	marker := filepath.Join(t.TempDir(), "executed")
+	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
+
+	_, err := RunRooted([]Definition{
+		{Name: "would execute", Argv: helperArgv("mark", marker, "ran", "0"), Required: true},
+		{Name: "invalid later definition", Argv: helperArgv("exit", "0"), Required: true, TimeoutSeconds: big.NewInt(MaxTimeoutSeconds + 1)},
+	}, repository, evidenceRoot)
+	var definitionError *DefinitionError
+	if !errors.As(err, &definitionError) {
+		t.Fatalf("error type = %T, want DefinitionError (%v)", err, err)
+	}
+	if got := err.Error(); got != "checks[1].timeout_seconds must be at most 300 seconds." {
+		t.Fatalf("error = %q", got)
+	}
+	if _, statError := os.Stat(marker); !errors.Is(statError, os.ErrNotExist) {
+		t.Fatalf("earlier check executed: %v", statError)
+	}
+	if _, statError := os.Stat(filepath.Join(evidence, "checks")); !errors.Is(statError, os.ErrNotExist) {
+		t.Fatalf("definition failure created logs: %v", statError)
+	}
+}
+
+func TestRunEnforcesPerStreamOutputLimitAtCapPlusOne(t *testing.T) {
+	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
+	for _, stream := range []struct {
+		name      string
+		extension string
+		message   string
+	}{
+		{name: "stdout", extension: "stdout", message: fmt.Sprintf(StdoutResourceLimitFormat, 0)},
+		{name: "stderr", extension: "stderr", message: fmt.Sprintf(StderrResourceLimitFormat, 0)},
+	} {
+		t.Run(stream.name, func(t *testing.T) {
+			repository := t.TempDir()
+			exactEvidence := privateTempDirectory(t)
+			exactRoot := openTestRoot(t, exactEvidence)
+			exactName := "exact " + stream.name
+			results, err := RunRooted([]Definition{{
+				Name:     exactName,
+				Argv:     helperArgv("stream", stream.name, strconv.FormatInt(MaxStreamOutputBytes, 10)),
+				Required: true,
+			}}, repository, exactRoot)
+			if err != nil {
+				t.Fatalf("exact cap: %v", err)
+			}
+			if len(results) != 1 || !results[0].Passed {
+				t.Fatalf("exact cap result = %#v", results)
+			}
+			assertFileSize(t, filepath.Join(exactEvidence, "checks", outputStem(0, exactName)+"."+stream.extension), MaxStreamOutputBytes)
+
+			overflowEvidence := privateTempDirectory(t)
+			overflowRoot := openTestRoot(t, overflowEvidence)
+			overflowName := "overflow " + stream.name
+			_, err = RunRooted([]Definition{{
+				Name:     overflowName,
+				Argv:     helperArgv("stream", stream.name, strconv.FormatInt(MaxStreamOutputBytes+1, 10)),
+				Required: true,
+			}}, repository, overflowRoot)
+			assertResourceLimit(t, err, stream.message)
+			assertFileSize(t, filepath.Join(overflowEvidence, "checks", outputStem(0, overflowName)+"."+stream.extension), MaxStreamOutputBytes)
+		})
+	}
+}
+
+func TestRunEnforcesSharedAggregateOutputLimit(t *testing.T) {
+	repository := t.TempDir()
+	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
+	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
+	checks := []Definition{
+		{Name: "first full pair", Argv: helperArgv("both-streams", strconv.FormatInt(MaxStreamOutputBytes, 10)), Required: true},
+		{Name: "second full pair", Argv: helperArgv("both-streams", strconv.FormatInt(MaxStreamOutputBytes, 10)), Required: true},
+		{Name: "aggregate plus one", Argv: helperArgv("stream", "stdout", "1"), Required: true},
+	}
+
+	_, err := RunRooted(checks, repository, evidenceRoot)
+	assertResourceLimit(t, err, AggregateResourceLimitMessage)
+	var total int64
+	for index, check := range checks {
+		for _, extension := range []string{"stdout", "stderr"} {
+			path := filepath.Join(evidence, "checks", outputStem(index, check.Name)+"."+extension)
+			info, statError := os.Stat(path)
+			if statError != nil {
+				t.Fatal(statError)
+			}
+			total += info.Size()
+		}
+	}
+	if total != MaxAggregateOutputBytes {
+		t.Fatalf("aggregate logs = %d, want %d", total, MaxAggregateOutputBytes)
+	}
+}
+
+func TestRunRootedContextTerminatesAtWallClockDeadline(t *testing.T) {
+	repository := t.TempDir()
+	evidenceRoot := openTestRoot(t, privateTempDirectory(t))
+	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	started := time.Now()
+	_, err := RunRootedContext(ctx, []Definition{{
+		Name:     "context deadline",
+		Argv:     helperArgv("block"),
+		Required: true,
+	}}, repository, evidenceRoot)
+	assertResourceLimit(t, err, WallClockResourceLimitMessage)
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
+		t.Fatalf("wall-clock limit returned after %s", elapsed)
 	}
 }
 
@@ -414,6 +530,24 @@ func TestCheckrunHelperProcess(t *testing.T) {
 		_, _ = os.Stdout.Write(bytes.Repeat([]byte{0xff}, size))
 		_, _ = os.Stderr.Write([]byte{0, 0xfe, '\n'})
 		os.Exit(0)
+	case "stream":
+		size, _ := strconv.Atoi(arguments[2])
+		destination := os.Stdout
+		if arguments[1] == "stderr" {
+			destination = os.Stderr
+		}
+		_, _ = destination.Write(bytes.Repeat([]byte{'x'}, size))
+		os.Exit(0)
+	case "both-streams":
+		size, _ := strconv.Atoi(arguments[1])
+		contents := bytes.Repeat([]byte{'x'}, size)
+		_, _ = os.Stdout.Write(contents)
+		_, _ = os.Stderr.Write(contents)
+		os.Exit(0)
+	case "block":
+		for {
+			time.Sleep(time.Hour)
+		}
 	case "exit":
 		code, _ := strconv.Atoi(arguments[1])
 		os.Exit(code)
@@ -491,6 +625,28 @@ func assertExitCode(t *testing.T, actual *int64, want int64) {
 	t.Helper()
 	if actual == nil || *actual != want {
 		t.Fatalf("exit code = %v, want %d", actual, want)
+	}
+}
+
+func assertResourceLimit(t *testing.T, err error, message string) {
+	t.Helper()
+	var limit *ResourceLimitError
+	if !errors.As(err, &limit) {
+		t.Fatalf("error type = %T, want ResourceLimitError (%v)", err, err)
+	}
+	if got := err.Error(); got != message {
+		t.Fatalf("resource error = %q, want %q", got, message)
+	}
+}
+
+func assertFileSize(t *testing.T, path string, want int64) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != want {
+		t.Fatalf("%s size = %d, want %d", path, info.Size(), want)
 	}
 }
 

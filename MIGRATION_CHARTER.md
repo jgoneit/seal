@@ -103,6 +103,52 @@ mutable directory names between identity checks on POSIX; that hostile
 same-user race is outside the v1 atomic object-binding guarantee. Windows uses
 handle-relative publication and has no pathname fallback.
 
+## Approved Go v1 Verify execution boundary
+
+Go v1 bounds the resources directly controlled by Verify as an explicitly
+approved invocation-environment and resource-limit divergence from the frozen
+runner. The default and maximum effective check timeout are both 300 seconds.
+A saved positive timeout at or below that maximum remains exact; a larger saved
+effective timeout is rejected before S0 or Evidence staging with exit `2`,
+rather than being clamped or converted into a timed-out check.
+
+One cumulative 600-second deadline begins immediately after the saved Task and
+all saved check definitions pass admission validation, before S0, and covers
+all source observation, check execution, change collection, artifact
+construction, and other pre-publication work. Check stdin is the platform null
+device while the caller environment remains inherited. Each raw stdout or
+stderr stream is limited to 8,388,608 bytes, and all check log streams in one
+Verify are limited to 33,554,432 bytes in aggregate. An exact-limit stream or
+aggregate remains valid. The first excess byte or cumulative deadline expiry
+terminates any current managed check tree, aborts the private staging Run,
+returns exit `3`, and publishes no Run. Logs are not silently truncated and no
+truncation marker or alternate Evidence schema is introduced.
+
+After process-tree cleanup, output collectors have a bounded one-second drain
+period. A descendant that deliberately escapes the managed group or Job and
+keeps a pipe open causes the unpublished Run to abort; it cannot hold Verify
+indefinitely or turn a forced partial log into successful Evidence.
+
+The cumulative deadline is propagated through Git subprocesses and checked
+cooperatively during source walking, Evidence self-validation reads, and
+hashing. It cannot preempt an individual filesystem syscall blocked inside the
+operating system. Once native Evidence publication begins, its commit result
+takes precedence over a concurrently expiring deadline; the command does not
+report an unpublished failure for a Run that became visible.
+
+Git processes receive platform tree ownership: a private POSIX session or a
+non-breakaway Windows Job established before user code resumes. A deliberately
+new POSIX session can escape portable process-group termination, so Git's pipe
+wait is also bounded to one second. That escape cannot hold Verify open, but the
+escaped process itself is outside Seal's portable ownership guarantee.
+
+These bounds change whether an unsafe invocation can start or publish, but do
+not reinterpret a published Task, check outcome, Source identity, Scope result,
+Evidence document, manifest, or Completion decision. They add no CPU or memory
+quota, network restriction, environment allowlist, Source-write sandbox,
+Reviewer, or Verdict behavior. The complete execution and failure contract is
+recorded in [`conformance/verify-contract.md`](conformance/verify-contract.md).
+
 ## Approved Go v1 Completion transition
 
 Go v1 Completion is an explicitly approved canonical policy transition, not an

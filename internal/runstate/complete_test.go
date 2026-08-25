@@ -45,6 +45,39 @@ func TestCompletionExitCodeClassification(t *testing.T) {
 	}
 }
 
+func TestCompleteConsumesHistoricalRunWithTimeoutAboveVerifyAdmissionLimit(t *testing.T) {
+	repository, taskID, run := passingCompletionRun(t)
+	for _, path := range []string{
+		filepath.Join(repository, ".seal", "tasks", taskID+".json"),
+		filepath.Join(run.EvidencePath, "task.json"),
+	} {
+		mutateTestJSON(t, path, func(task map[string]any) {
+			task["checks"].([]any)[0].(map[string]any)["timeout_seconds"] = json.Number("301")
+		})
+	}
+	mutateTestJSON(t, filepath.Join(run.EvidencePath, "checks.json"), func(checks map[string]any) {
+		checks["checks"].([]any)[0].(map[string]any)["effective_timeout"] = json.Number("301")
+	})
+	manifest := readTestObject(t, filepath.Join(run.EvidencePath, "run-manifest.json"))
+	records := manifest["files"].([]any)
+	files := make([]string, len(records))
+	for index, record := range records {
+		files[index] = record.(map[string]any)["path"].(string)
+	}
+	writeManifest(t, run.EvidencePath, taskID, run.RunID, files)
+
+	if _, err := ValidateRun(repository, taskID, run.RunID); err != nil {
+		t.Fatalf("ValidateRun() historical timeout: %v", err)
+	}
+	completed, err := Complete(repository, taskID, run.RunID)
+	if err != nil {
+		t.Fatalf("Complete() historical timeout: %v", err)
+	}
+	if completed.RunID != run.RunID || completed.TaskID != taskID {
+		t.Fatalf("Complete() = %#v", completed)
+	}
+}
+
 func TestCompleteWritesImmutableV2AndRechecksCurrentEligibility(t *testing.T) {
 	repository, taskID, run := passingCompletionRun(t)
 	for _, name := range []string{"verdict.raw.json", "verdict.json"} {

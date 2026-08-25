@@ -2,6 +2,7 @@ package sourceobs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,13 +14,94 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
+)
+
+const (
+	gitProcessTreeHelperMode = "SOURCEOBS_GIT_PROCESS_TREE_HELPER"
+	gitProcessTreeReadyPath  = "SOURCEOBS_GIT_PROCESS_TREE_READY"
 )
 
 type fixtureRepository struct {
 	t    *testing.T
 	root string
+}
+
+func TestMain(m *testing.M) {
+	if mode := os.Getenv(gitProcessTreeHelperMode); mode != "" {
+		os.Exit(runGitProcessTreeHelper(mode))
+	}
+	os.Exit(m.Run())
+}
+
+func runGitProcessTreeHelper(mode string) int {
+	switch mode {
+	case "root", "escaped-root":
+		child := exec.Command(os.Args[0])
+		child.Env = environmentWithValue(os.Environ(), gitProcessTreeHelperMode, "descendant")
+		child.Stdout = os.Stdout
+		child.Stderr = os.Stderr
+		if mode == "escaped-root" {
+			if err := giveHelperPrivateSession(child); err != nil {
+				fmt.Fprintf(os.Stderr, "sourceobs process-tree helper: %v\n", err)
+				return 95
+			}
+		}
+		if err := child.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "sourceobs process-tree helper: %v\n", err)
+			return 91
+		}
+		return 0
+	case "descendant":
+		ready := os.Getenv(gitProcessTreeReadyPath)
+		if ready == "" {
+			fmt.Fprintln(os.Stderr, "sourceobs process-tree helper: missing ready path")
+			return 92
+		}
+		if err := os.WriteFile(ready, []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "sourceobs process-tree helper: %v\n", err)
+			return 93
+		}
+		for {
+			time.Sleep(time.Hour)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "sourceobs process-tree helper: unknown mode %q\n", mode)
+		return 94
+	}
+}
+
+func giveHelperPrivateSession(command *exec.Cmd) error {
+	attributes := &syscall.SysProcAttr{}
+	setsid := reflect.ValueOf(attributes).Elem().FieldByName("Setsid")
+	if !setsid.IsValid() || !setsid.CanSet() || setsid.Kind() != reflect.Bool {
+		return errors.New("private sessions are unsupported on this test platform")
+	}
+	setsid.SetBool(true)
+	command.SysProcAttr = attributes
+	return nil
+}
+
+func testPlatformSupportsPrivateSessions() bool {
+	attributes := &syscall.SysProcAttr{}
+	setsid := reflect.ValueOf(attributes).Elem().FieldByName("Setsid")
+	return setsid.IsValid() && setsid.CanSet() && setsid.Kind() == reflect.Bool
+}
+
+func environmentWithValue(environment []string, key, value string) []string {
+	result := make([]string, 0, len(environment)+1)
+	for _, item := range environment {
+		itemKey, _, _ := strings.Cut(item, "=")
+		if strings.EqualFold(itemKey, key) {
+			continue
+		}
+		result = append(result, item)
+	}
+	return append(result, key+"="+value)
 }
 
 func TestPhaseResultsCleanCanonicalDocumentsAndDetachedBytes(t *testing.T) {
@@ -120,12 +202,12 @@ func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 
 func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
 	repository, baseline := basicFixture(t)
-	context, err := resolveContext(repository.root, baseline)
+	repositoryContext, err := resolveContext(context.Background(), repository.root, baseline)
 	if err != nil {
 		t.Fatal(err)
 	}
 	baselineBlobs := make(map[string]blobIdentity)
-	before, err := collectSnapshotObservation(context, baselineBlobs)
+	before, err := collectSnapshotObservation(context.Background(), repositoryContext, baselineBlobs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +216,7 @@ func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
 		[]byte("concurrent Evidence\n"),
 		0o600,
 	)
-	after, err := collectSnapshotObservation(context, baselineBlobs)
+	after, err := collectSnapshotObservation(context.Background(), repositoryContext, baselineBlobs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +225,7 @@ func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
 	}
 
 	repository.write("product.txt", []byte("product change\n"), 0o644)
-	changed, err := collectSnapshotObservation(context, baselineBlobs)
+	changed, err := collectSnapshotObservation(context.Background(), repositoryContext, baselineBlobs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,6 +580,155 @@ func TestPhaseAPIsRejectInvalidRequest(t *testing.T) {
 	} {
 		_, err := ObserveChanges(request)
 		assertErrorKind(t, err, InvalidRequest, "")
+	}
+}
+
+func TestContextAPIsPreserveBackgroundWrapperResults(t *testing.T) {
+	repository, baseline := basicFixture(t)
+	snapshotRequest := SnapshotRequest{CWD: repository.root, Baseline: baseline}
+	legacySnapshot, err := ObserveSnapshot(snapshotRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextSnapshot, err := ObserveSnapshotContext(context.Background(), snapshotRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(legacySnapshot.SnapshotJSON(), contextSnapshot.SnapshotJSON()) ||
+		legacySnapshot.SnapshotSHA256() != contextSnapshot.SnapshotSHA256() {
+		t.Fatal("ObserveSnapshot wrapper and context API returned different source identity")
+	}
+
+	changesRequest := Request{CWD: repository.root, Baseline: baseline, Scope: []string{"src"}}
+	legacyChanges, err := ObserveChanges(changesRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextChanges, err := ObserveChangesContext(context.Background(), changesRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(legacyChanges.Changes(), contextChanges.Changes()) ||
+		!bytes.Equal(legacyChanges.ChangedFilesJSON(), contextChanges.ChangedFilesJSON()) ||
+		!bytes.Equal(legacyChanges.DiffPatch(), contextChanges.DiffPatch()) {
+		t.Fatal("ObserveChanges wrapper and context API returned different change evidence")
+	}
+}
+
+func TestContextAPIsReturnClassifiedCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, snapshotErr := ObserveSnapshotContext(ctx, SnapshotRequest{})
+	assertErrorKind(t, snapshotErr, RepositoryState, "canceled")
+	if !errors.Is(snapshotErr, context.Canceled) {
+		t.Fatalf("ObserveSnapshotContext error = %v, want context.Canceled", snapshotErr)
+	}
+	_, changesErr := ObserveChangesContext(ctx, Request{})
+	assertErrorKind(t, changesErr, RepositoryState, "canceled")
+	if !errors.Is(changesErr, context.Canceled) {
+		t.Fatalf("ObserveChangesContext error = %v, want context.Canceled", changesErr)
+	}
+
+	deadlineContext, deadlineCancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer deadlineCancel()
+	_, deadlineErr := ObserveSnapshotContext(deadlineContext, SnapshotRequest{})
+	assertErrorKind(t, deadlineErr, RepositoryState, "deadline")
+	if !errors.Is(deadlineErr, context.DeadlineExceeded) {
+		t.Fatalf("ObserveSnapshotContext error = %v, want context.DeadlineExceeded", deadlineErr)
+	}
+}
+
+func TestGitResultCancelsDescendantProcessTree(t *testing.T) {
+	testGitResultCancellation(t, "root", false)
+}
+
+func TestGitResultCancellationBoundsEscapedDescendantPipe(t *testing.T) {
+	if !testPlatformSupportsPrivateSessions() {
+		t.Skip("private POSIX sessions are unsupported")
+	}
+	testGitResultCancellation(t, "escaped-root", true)
+}
+
+func testGitResultCancellation(t *testing.T, helperMode string, escaped bool) {
+	t.Helper()
+	directory := t.TempDir()
+	ready := filepath.Join(directory, "ready")
+	wrapperName := "git"
+	if runtime.GOOS == "windows" {
+		wrapperName += ".exe"
+	}
+	wrapper := filepath.Join(directory, wrapperName)
+	testExecutable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executableBytes, err := os.ReadFile(testExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(wrapper, executableBytes, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory)
+	t.Setenv(gitProcessTreeHelperMode, helperMode)
+	t.Setenv(gitProcessTreeReadyPath, ready)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, err := gitResult(ctx, ".", []int{0}, "status")
+		result <- err
+	}()
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		select {
+		case err := <-result:
+			t.Fatalf("fake Git process tree exited before cancellation: %v", err)
+		case <-deadline.C:
+			t.Fatal("fake Git descendant did not start")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	var escapedProcess *os.Process
+	if escaped {
+		pidBytes, err := os.ReadFile(ready)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pid, err := strconv.Atoi(string(pidBytes))
+		if err != nil {
+			t.Fatal(err)
+		}
+		escapedProcess, err = os.FindProcess(pid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			_ = escapedProcess.Kill()
+			_ = escapedProcess.Release()
+		}()
+	}
+	canceledAt := time.Now()
+	cancel()
+	select {
+	case err := <-result:
+		assertErrorKind(t, err, RepositoryState, "canceled")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("gitResult error = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("gitResult did not stop after process-tree cancellation")
+	}
+	if escaped && time.Since(canceledAt) < gitPipeDrainLimit/2 {
+		t.Fatal("escaped descendant did not exercise the bounded pipe-copy wait")
 	}
 }
 

@@ -2,6 +2,7 @@ package sourceobs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -13,8 +14,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
+
+const gitPipeDrainLimit = time.Second
 
 type repositoryContext struct {
 	root            string
@@ -46,7 +50,10 @@ type blobIdentity struct {
 	sha256 string
 }
 
-func resolveContext(cwd, baseline string) (repositoryContext, error) {
+func resolveContext(ctx context.Context, cwd, baseline string) (repositoryContext, error) {
+	if err := contextFailure(ctx); err != nil {
+		return repositoryContext{}, err
+	}
 	if cwd == "" {
 		cwd = "."
 	}
@@ -60,7 +67,7 @@ func resolveContext(cwd, baseline string) (repositoryContext, error) {
 		return repositoryContext{}, repositoryFailure("Active custom Git replacement refs are unsupported.", nil)
 	}
 
-	rootOutput, err := gitOutput(cwd, "rev-parse", "--path-format=absolute", "--show-toplevel")
+	rootOutput, err := gitOutput(ctx, cwd, "rev-parse", "--path-format=absolute", "--show-toplevel")
 	if err != nil {
 		return repositoryContext{}, repositoryFailure("Source observation must run inside an initialized Git worktree.", err)
 	}
@@ -73,28 +80,28 @@ func resolveContext(cwd, baseline string) (repositoryContext, error) {
 		return repositoryContext{}, repositoryFailure("Could not resolve the Git worktree root.", err)
 	}
 
-	inside, err := gitText(root, "rev-parse", "--is-inside-work-tree")
+	inside, err := gitText(ctx, root, "rev-parse", "--is-inside-work-tree")
 	if err != nil || inside != "true" {
 		return repositoryContext{}, repositoryFailure("Source observation requires a non-bare Git worktree.", err)
 	}
-	bare, err := gitText(root, "rev-parse", "--is-bare-repository")
+	bare, err := gitText(ctx, root, "rev-parse", "--is-bare-repository")
 	if err != nil || bare != "false" {
 		return repositoryContext{}, repositoryFailure("Source observation requires a non-bare Git worktree.", err)
 	}
-	if _, err := resolveCommit(root, "HEAD"); err != nil {
+	if _, err := resolveCommit(ctx, root, "HEAD"); err != nil {
 		return repositoryContext{}, repositoryFailure("Git HEAD must resolve to a commit.", err)
 	}
-	resolvedBaseline, err := resolveCommit(root, baseline)
+	resolvedBaseline, err := resolveCommit(ctx, root, baseline)
 	if err != nil || resolvedBaseline != baseline {
 		return repositoryContext{}, repositoryFailure("Task baseline does not resolve to its exact saved commit.", err)
 	}
-	if err := checkRepositoryGuards(root); err != nil {
+	if err := checkRepositoryGuards(ctx, root); err != nil {
 		return repositoryContext{}, err
 	}
-	if _, err := readIndexState(root); err != nil {
+	if _, err := readIndexState(ctx, root); err != nil {
 		return repositoryContext{}, err
 	}
-	baselineEntries, err := readBaselineTree(root, baseline)
+	baselineEntries, err := readBaselineTree(ctx, root, baseline)
 	if err != nil {
 		return repositoryContext{}, err
 	}
@@ -105,8 +112,8 @@ func resolveContext(cwd, baseline string) (repositoryContext, error) {
 	}, nil
 }
 
-func resolveCommit(root, reference string) (string, error) {
-	output, err := gitOutput(root, "rev-parse", "--verify", "--end-of-options", reference+"^{commit}")
+func resolveCommit(ctx context.Context, root, reference string) (string, error) {
+	output, err := gitOutput(ctx, root, "rev-parse", "--verify", "--end-of-options", reference+"^{commit}")
 	if err != nil {
 		return "", err
 	}
@@ -120,8 +127,8 @@ func resolveCommit(root, reference string) (string, error) {
 	return value, nil
 }
 
-func checkRepositoryGuards(root string) error {
-	replacements, err := gitOutput(root, "for-each-ref", "--format=%(refname)", "refs/replace")
+func checkRepositoryGuards(ctx context.Context, root string) error {
+	replacements, err := gitOutput(ctx, root, "for-each-ref", "--format=%(refname)", "refs/replace")
 	if err != nil {
 		return repositoryFailure("Could not inspect Git replacement refs.", err)
 	}
@@ -129,7 +136,7 @@ func checkRepositoryGuards(root string) error {
 		return repositoryFailure("Active Git replacement refs are unsupported.", nil)
 	}
 	for _, key := range []string{"core.sparseCheckout", "core.sparseCheckoutCone"} {
-		result, err := gitResult(root, []int{0, 1}, "config", "--bool", "--get", key)
+		result, err := gitResult(ctx, root, []int{0, 1}, "config", "--bool", "--get", key)
 		if err != nil {
 			return repositoryFailure("Could not inspect Git sparse-checkout state.", err)
 		}
@@ -140,15 +147,18 @@ func checkRepositoryGuards(root string) error {
 	return nil
 }
 
-func readIndexState(root string) (indexState, error) {
-	if err := checkRepositoryGuards(root); err != nil {
+func readIndexState(ctx context.Context, root string) (indexState, error) {
+	if err := checkRepositoryGuards(ctx, root); err != nil {
 		return indexState{}, err
 	}
-	flags, err := gitOutput(root, "ls-files", "-v", "-z")
+	flags, err := gitOutput(ctx, root, "ls-files", "-v", "-z")
 	if err != nil {
 		return indexState{}, repositoryFailure("Could not inspect Git index flags.", err)
 	}
 	for _, record := range splitNUL(flags) {
+		if err := contextFailure(ctx); err != nil {
+			return indexState{}, err
+		}
 		if len(record) < 3 || record[1] != ' ' {
 			return indexState{}, repositoryFailure("Could not parse Git index flags.", nil)
 		}
@@ -165,12 +175,15 @@ func readIndexState(root string) (indexState, error) {
 		}
 	}
 
-	stage, err := gitOutput(root, "ls-files", "--stage", "-z")
+	stage, err := gitOutput(ctx, root, "ls-files", "--stage", "-z")
 	if err != nil {
 		return indexState{}, repositoryFailure("Could not inspect staged-file metadata.", err)
 	}
 	entries := make(map[string]treeEntry)
 	for _, record := range splitNUL(stage) {
+		if err := contextFailure(ctx); err != nil {
+			return indexState{}, err
+		}
 		header, rawPath, ok := bytes.Cut(record, []byte{'\t'})
 		if !ok {
 			return indexState{}, repositoryFailure("Could not parse staged-file metadata.", nil)
@@ -203,13 +216,16 @@ func readIndexState(root string) (indexState, error) {
 	return indexState{entries: entries}, nil
 }
 
-func readBaselineTree(root, baseline string) (map[string]treeEntry, error) {
-	output, err := gitOutput(root, "ls-tree", "-r", "-z", "--full-tree", baseline)
+func readBaselineTree(ctx context.Context, root, baseline string) (map[string]treeEntry, error) {
+	output, err := gitOutput(ctx, root, "ls-tree", "-r", "-z", "--full-tree", baseline)
 	if err != nil {
 		return nil, repositoryFailure("Could not read the Task baseline tree.", err)
 	}
 	entries := make(map[string]treeEntry)
 	for _, record := range splitNUL(output) {
+		if err := contextFailure(ctx); err != nil {
+			return nil, err
+		}
 		header, rawPath, ok := bytes.Cut(record, []byte{'\t'})
 		if !ok {
 			return nil, repositoryFailure("Could not parse Git baseline-tree metadata.", nil)
@@ -242,14 +258,17 @@ func readBaselineTree(root, baseline string) (map[string]treeEntry, error) {
 	return entries, nil
 }
 
-func collectChanges(context repositoryContext, scope []string) (ChangeSet, error) {
-	if _, err := readIndexState(context.root); err != nil {
+func collectChanges(ctx context.Context, repository repositoryContext, scope []string) (ChangeSet, error) {
+	if _, err := readIndexState(ctx, repository.root); err != nil {
 		return ChangeSet{}, err
 	}
 	changes := make([]Change, 0)
 	for _, source := range []string{"committed", "staged", "unstaged"} {
-		arguments := trackedDiffArguments("--raw", source, context.baseline, true)
-		raw, err := gitOutput(context.root, arguments...)
+		if err := contextFailure(ctx); err != nil {
+			return ChangeSet{}, err
+		}
+		arguments := trackedDiffArguments("--raw", source, repository.baseline, true)
+		raw, err := gitOutput(ctx, repository.root, arguments...)
 		if err != nil {
 			return ChangeSet{}, repositoryFailure("Could not collect "+source+" Git changes.", err)
 		}
@@ -257,8 +276,8 @@ func collectChanges(context repositoryContext, scope []string) (ChangeSet, error
 		if err != nil {
 			return ChangeSet{}, err
 		}
-		numstatArguments := trackedDiffArguments("--numstat", source, context.baseline, false)
-		numstat, err := gitOutput(context.root, numstatArguments...)
+		numstatArguments := trackedDiffArguments("--numstat", source, repository.baseline, false)
+		numstat, err := gitOutput(ctx, repository.root, numstatArguments...)
 		if err != nil {
 			return ChangeSet{}, repositoryFailure("Could not classify "+source+" binary changes.", err)
 		}
@@ -267,6 +286,9 @@ func collectChanges(context repositoryContext, scope []string) (ChangeSet, error
 			return ChangeSet{}, err
 		}
 		for _, entry := range entries {
+			if err := contextFailure(ctx); err != nil {
+				return ChangeSet{}, err
+			}
 			if rawEntryTouchesGitlink(entry) {
 				return ChangeSet{}, repositoryFailure("Gitlink mutations are unsupported.", nil)
 			}
@@ -278,16 +300,19 @@ func collectChanges(context repositoryContext, scope []string) (ChangeSet, error
 		}
 	}
 
-	untrackedOutput, err := gitOutput(context.root, "ls-files", "--others", "--exclude-standard", "-z")
+	untrackedOutput, err := gitOutput(ctx, repository.root, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		return ChangeSet{}, repositoryFailure("Could not collect untracked Git paths.", err)
 	}
 	for _, rawPath := range splitNUL(untrackedOutput) {
+		if err := contextFailure(ctx); err != nil {
+			return ChangeSet{}, err
+		}
 		path, err := decodeGitPath(rawPath)
 		if err != nil {
 			return ChangeSet{}, err
 		}
-		binary, err := untrackedIsBinary(context.root, path)
+		binary, err := untrackedIsBinary(ctx, repository.root, path)
 		if err != nil {
 			return ChangeSet{}, err
 		}
@@ -302,11 +327,14 @@ func collectChanges(context repositoryContext, scope []string) (ChangeSet, error
 	}
 
 	collection := ChangeSet{
-		Baseline: context.baseline,
+		Baseline: repository.baseline,
 		Scope:    append([]string(nil), scope...),
 		Changes:  cloneChanges(changes),
 	}
 	for _, change := range changes {
+		if err := contextFailure(ctx); err != nil {
+			return ChangeSet{}, err
+		}
 		if isMetadataChange(change) {
 			continue
 		}
@@ -503,8 +531,8 @@ func parseBinaryPaths(output []byte) (map[pathPair]struct{}, error) {
 	return result, nil
 }
 
-func untrackedIsBinary(root, path string) (bool, error) {
-	result, err := gitResult(root, []int{0, 1},
+func untrackedIsBinary(ctx context.Context, root, path string) (bool, error) {
+	result, err := gitResult(ctx, root, []int{0, 1},
 		"diff", "--no-index", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "--", "/dev/null", path,
 	)
 	if err != nil {
@@ -573,15 +601,21 @@ func isMetadataChange(change Change) bool {
 	return change.PreviousPath == nil || isMetadataPath(*change.PreviousPath)
 }
 
-func readBlobIdentity(context repositoryContext, oid string) (blobIdentity, error) {
-	command := newGitCommand(context.root, "cat-file", "blob", oid)
+func readBlobIdentity(ctx context.Context, repository repositoryContext, oid string) (blobIdentity, error) {
+	command := newGitCommand(ctx, repository.root, "cat-file", "blob", oid)
 	hash := sha256.New()
 	counter := &countingWriter{writer: hash}
 	var stderr bytes.Buffer
 	command.Stdout = counter
 	command.Stderr = &stderr
-	if err := command.Run(); err != nil {
+	if err := runGitCommand(command); err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return blobIdentity{}, contextErr
+		}
 		return blobIdentity{}, repositoryFailure("Could not read baseline blob '"+oid+"'.", gitCommandError(err, stderr.Bytes()))
+	}
+	if err := contextFailure(ctx); err != nil {
+		return blobIdentity{}, err
 	}
 	return blobIdentity{size: counter.count, sha256: hex.EncodeToString(hash.Sum(nil))}, nil
 }
@@ -597,8 +631,8 @@ func (writer *countingWriter) Write(value []byte) (int, error) {
 	return written, err
 }
 
-func collectDiffPatch(context repositoryContext, changes ChangeSet) ([]byte, error) {
-	if err := checkRepositoryGuards(context.root); err != nil {
+func collectDiffPatch(ctx context.Context, repository repositoryContext, changes ChangeSet) ([]byte, error) {
+	if err := checkRepositoryGuards(ctx, repository.root); err != nil {
 		return nil, err
 	}
 	prefix := []string{"diff", "--binary", "--no-ext-diff", "--no-textconv", "--ignore-submodules=dirty"}
@@ -607,12 +641,15 @@ func collectDiffPatch(context repositoryContext, changes ChangeSet) ([]byte, err
 		":(exclude).seal/config.json", ":(exclude).seal/lessons.md", ":(exclude).seal/runs.jsonl",
 	}
 	commands := [][]string{
-		append(append(append([]string(nil), prefix...), context.baseline, "HEAD"), pathspecs...),
+		append(append(append([]string(nil), prefix...), repository.baseline, "HEAD"), pathspecs...),
 		append(append(append([]string(nil), prefix...), "--cached"), pathspecs...),
 		append(append(append([]string(nil), prefix...), "--ignore-submodules=all"), pathspecs...),
 	}
 	accepted := [][]int{{0}, {0}, {0}}
 	for _, change := range changes.Changes {
+		if err := contextFailure(ctx); err != nil {
+			return nil, err
+		}
 		if change.Source != "untracked" || isMetadataPath(change.Path) {
 			continue
 		}
@@ -621,7 +658,7 @@ func collectDiffPatch(context repositoryContext, changes ChangeSet) ([]byte, err
 	}
 	var patch []byte
 	for index, arguments := range commands {
-		result, err := gitResult(context.root, accepted[index], arguments...)
+		result, err := gitResult(ctx, repository.root, accepted[index], arguments...)
 		if err != nil {
 			return nil, repositoryFailure("Could not collect the raw binary source diff.", err)
 		}
@@ -718,16 +755,16 @@ func oneGitLine(output []byte, context string) (string, error) {
 	return string(output), nil
 }
 
-func gitText(root string, arguments ...string) (string, error) {
-	output, err := gitOutput(root, arguments...)
+func gitText(ctx context.Context, root string, arguments ...string) (string, error) {
+	output, err := gitOutput(ctx, root, arguments...)
 	if err != nil {
 		return "", err
 	}
 	return oneGitLine(output, "Git output")
 }
 
-func gitOutput(root string, arguments ...string) ([]byte, error) {
-	result, err := gitResult(root, []int{0}, arguments...)
+func gitOutput(ctx context.Context, root string, arguments ...string) ([]byte, error) {
+	result, err := gitResult(ctx, root, []int{0}, arguments...)
 	if err != nil {
 		return nil, err
 	}
@@ -739,12 +776,18 @@ type commandResult struct {
 	exitCode int
 }
 
-func gitResult(root string, accepted []int, arguments ...string) (commandResult, error) {
-	command := newGitCommand(root, arguments...)
+func gitResult(ctx context.Context, root string, accepted []int, arguments ...string) (commandResult, error) {
+	if err := contextFailure(ctx); err != nil {
+		return commandResult{}, err
+	}
+	command := newGitCommand(ctx, root, arguments...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
-	err := command.Run()
+	err := runGitCommand(command)
+	if contextErr := contextFailure(ctx); contextErr != nil {
+		return commandResult{}, contextErr
+	}
 	exitCode := 0
 	if err != nil {
 		var exitError *exec.ExitError
@@ -766,12 +809,16 @@ func errorsAs(err error, target any) bool {
 	return errors.As(err, target)
 }
 
-func newGitCommand(root string, arguments ...string) *exec.Cmd {
+func newGitCommand(ctx context.Context, root string, arguments ...string) *exec.Cmd {
 	argv := make([]string, 0, len(arguments)+4)
 	argv = append(argv, "--no-replace-objects", "-C", root)
 	argv = append(argv, arguments...)
-	command := exec.Command("git", argv...)
+	command := exec.CommandContext(ctx, "git", argv...)
 	command.Env = gitEnvironment()
+	// A deliberately detached descendant can outlive the managed process tree
+	// while retaining Git's output handles. Bound exec's pipe-copy wait so
+	// context cancellation still returns to Verify deterministically.
+	command.WaitDelay = gitPipeDrainLimit
 	return command
 }
 

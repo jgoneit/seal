@@ -2,8 +2,7 @@ package runstate
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -31,12 +30,25 @@ func validateSourceBinding(
 	changedFiles jsonObject,
 	verification jsonObject,
 ) (bool, error) {
-	before, err := readSourceSnapshot(runDirectory, "source-before-checks.json")
+	return validateSourceBindingContext(context.Background(), runDirectory, taskBaseline, changedFiles, verification)
+}
+
+func validateSourceBindingContext(
+	ctx context.Context,
+	runDirectory string,
+	taskBaseline string,
+	changedFiles jsonObject,
+	verification jsonObject,
+) (bool, error) {
+	before, err := readSourceSnapshotContext(ctx, runDirectory, "source-before-checks.json")
 	if err != nil {
 		return false, err
 	}
-	after, err := readSourceSnapshot(runDirectory, "source-after-checks.json")
+	after, err := readSourceSnapshotContext(ctx, runDirectory, "source-after-checks.json")
 	if err != nil {
+		return false, err
+	}
+	if err := artifactContextError(ctx); err != nil {
 		return false, err
 	}
 	if !integerEquals(verification["source_snapshot_schema_version"], 1) {
@@ -95,8 +107,15 @@ func validateSourceBinding(
 }
 
 func readSourceSnapshot(runDirectory, filename string) (sourceSnapshot, error) {
-	contents, err := readArtifact(runDirectory, filename)
+	return readSourceSnapshotContext(context.Background(), runDirectory, filename)
+}
+
+func readSourceSnapshotContext(ctx context.Context, runDirectory, filename string) (sourceSnapshot, error) {
+	contents, err := readArtifactContext(ctx, runDirectory, filename)
 	if err != nil {
+		if _, ok := err.(*EvidenceError); !ok {
+			return sourceSnapshot{}, err
+		}
 		detail := "could not be read"
 		if evidence, ok := err.(*EvidenceError); ok {
 			switch evidence.message {
@@ -115,14 +134,27 @@ func readSourceSnapshot(runDirectory, filename string) (sourceSnapshot, error) {
 		}
 		return sourceSnapshot{}, &EvidenceError{message: fmt.Sprintf("Source Binding artifact '%s' is not valid JSON.", filename)}
 	}
-	parsed, err := parseSourceSnapshot(document)
+	if err := artifactContextError(ctx); err != nil {
+		return sourceSnapshot{}, err
+	}
+	parsed, err := parseSourceSnapshotContext(ctx, document)
 	if err != nil {
+		if contextErr := artifactContextError(ctx); contextErr != nil {
+			return sourceSnapshot{}, contextErr
+		}
 		return sourceSnapshot{}, &EvidenceError{message: fmt.Sprintf("Source Binding artifact '%s' is invalid: %s", filename, err.Error())}
 	}
 	return parsed, nil
 }
 
 func parseSourceSnapshot(document jsonObject) (sourceSnapshot, error) {
+	return parseSourceSnapshotContext(context.Background(), document)
+}
+
+func parseSourceSnapshotContext(ctx context.Context, document jsonObject) (sourceSnapshot, error) {
+	if err := artifactContextError(ctx); err != nil {
+		return sourceSnapshot{}, err
+	}
 	if !exactKeys(map[string]any(document), "schema_version", "baseline", "entries", "snapshot_sha256") {
 		return sourceSnapshot{}, fmt.Errorf("Source Snapshot document has missing or unexpected fields.")
 	}
@@ -140,6 +172,9 @@ func parseSourceSnapshot(document jsonObject) (sourceSnapshot, error) {
 	entries := make([]sourceEntry, len(rawEntries))
 	var previousSortKey []byte
 	for index, value := range rawEntries {
+		if err := artifactContextError(ctx); err != nil {
+			return sourceSnapshot{}, err
+		}
 		entry, ok := value.(map[string]any)
 		if !ok {
 			return sourceSnapshot{}, fmt.Errorf("Source Snapshot entry %d must be an object.", index)
@@ -204,6 +239,9 @@ func parseSourceSnapshot(document jsonObject) (sourceSnapshot, error) {
 	}
 	payloadEntries := make([]any, len(rawEntries))
 	for index, entry := range rawEntries {
+		if err := artifactContextError(ctx); err != nil {
+			return sourceSnapshot{}, err
+		}
 		payloadEntries[index] = entry
 	}
 	payload := map[string]any{
@@ -215,8 +253,10 @@ func parseSourceSnapshot(document jsonObject) (sourceSnapshot, error) {
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
-	digest := sha256.Sum256(canonical)
-	expectedDigest := hex.EncodeToString(digest[:])
+	expectedDigest, err := hashBytesContext(ctx, canonical)
+	if err != nil {
+		return sourceSnapshot{}, err
+	}
 	if recordedDigest != expectedDigest {
 		return sourceSnapshot{}, fmt.Errorf("Source Snapshot snapshot_sha256 does not match its contents.")
 	}
