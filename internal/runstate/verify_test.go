@@ -194,20 +194,64 @@ func TestVerifyRejectsSavedTimeoutAboveBasicProfileMaximumBeforeS0(t *testing.T)
 	}
 }
 
-func TestVerifyWallClockBudgetIsSharedAcrossChecks(t *testing.T) {
+func TestVerifyWallClockContextIsSharedAcrossChecks(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "completed-checks")
 	repository, taskID := verificationRepository(t, []map[string]any{
-		verificationDelayCheck("first", 1200, marker, "first"),
-		verificationDelayCheck("second", 1200, marker, "second"),
+		verificationDelayCheck("first", 0, marker, "first"),
+		verificationMarkerDelayCheck("second", 30_000, marker, "second-started"),
 	})
 
 	prepared, err := prepareVerification(repository, taskID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	_, err = verifyPreparedContext(ctx, prepared, verifyHooks{})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	result := make(chan error, 1)
+	drained := false
+	defer func() {
+		cancel()
+		if !drained {
+			select {
+			case <-result:
+			case <-time.After(10 * time.Second):
+			}
+		}
+	}()
+	go func() {
+		_, runErr := verifyPreparedContext(ctx, prepared, verifyHooks{})
+		result <- runErr
+	}()
+
+	wantMarker := "first\nsecond-started\n"
+	waitDeadline := time.NewTimer(20 * time.Second)
+	defer waitDeadline.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		contents, readErr := os.ReadFile(marker)
+		if readErr == nil && string(contents) == wantMarker {
+			break
+		}
+		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+			t.Fatalf("read marker: %v", readErr)
+		}
+		select {
+		case err = <-result:
+			drained = true
+			t.Fatalf("verifyPreparedContext() returned before the second check started: %v", err)
+		case <-ticker.C:
+		case <-waitDeadline.C:
+			t.Fatalf("checks did not reach the shared-context boundary; marker = %q", contents)
+		}
+	}
+
+	cancel()
+	select {
+	case err = <-result:
+		drained = true
+	case <-time.After(10 * time.Second):
+		t.Fatal("verifyPreparedContext() did not return after the shared deadline expired")
+	}
 	if err == nil || KindOf(err) != KindRepository || err.Error() != verificationDeadlineMessage {
 		t.Fatalf("verifyPreparedContext() error = %v, kind = %v; want wall-clock RepositoryError", err, KindOf(err))
 	}
@@ -215,8 +259,8 @@ func TestVerifyWallClockBudgetIsSharedAcrossChecks(t *testing.T) {
 	if readErr != nil {
 		t.Fatalf("read marker: %v", readErr)
 	}
-	if string(contents) != "first\n" {
-		t.Fatalf("completed checks = %q, want only first check", contents)
+	if string(contents) != wantMarker {
+		t.Fatalf("check markers = %q, want first complete and second started", contents)
 	}
 	assertNoPublishedOrStagingRun(t, filepath.Join(repository, ".seal", "evidence", taskID))
 }
@@ -558,7 +602,7 @@ func TestVerifyManagedCheckHelper(t *testing.T) {
 		_, _ = os.Stdout.Write([]byte{'r', 'a', 'w', 0x00, 0xff, '\n'})
 		time.Sleep(10 * time.Second)
 		os.Exit(0)
-	case "delay-marker":
+	case "delay-marker", "marker-delay":
 		if separator+4 >= len(os.Args) {
 			os.Exit(96)
 		}
@@ -566,7 +610,9 @@ func TestVerifyManagedCheckHelper(t *testing.T) {
 		if err != nil {
 			os.Exit(96)
 		}
-		time.Sleep(time.Duration(delay) * time.Millisecond)
+		if mode == "delay-marker" {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+		}
 		file, err := os.OpenFile(os.Args[separator+3], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
 		if err != nil {
 			os.Exit(96)
@@ -575,6 +621,9 @@ func TestVerifyManagedCheckHelper(t *testing.T) {
 		closeErr := file.Close()
 		if writeErr != nil || closeErr != nil {
 			os.Exit(96)
+		}
+		if mode == "marker-delay" {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
 		}
 		os.Exit(0)
 	case "stdout-bytes", "stderr-bytes":
@@ -617,6 +666,13 @@ func verificationDelayCheck(name string, milliseconds int, marker, value string)
 		"required":        true,
 		"timeout_seconds": json.Number("5"),
 	}
+}
+
+func verificationMarkerDelayCheck(name string, milliseconds int, marker, value string) map[string]any {
+	check := verificationDelayCheck(name, milliseconds, marker, value)
+	check["argv"].([]any)[3] = "marker-delay"
+	check["timeout_seconds"] = json.Number("60")
+	return check
 }
 
 func verificationOutputCheck(name, mode string, bytes int) map[string]any {
