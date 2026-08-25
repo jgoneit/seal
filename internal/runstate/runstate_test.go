@@ -1,6 +1,8 @@
 package runstate
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -428,6 +430,45 @@ func TestArtifactFilesystemPathUsesPythonSurrogateEscape(t *testing.T) {
 	if string(contents) != "raw-byte\n" {
 		t.Fatalf("readArtifact() = %q", contents)
 	}
+}
+
+func TestArtifactReadAndHashStopBetweenChunks(t *testing.T) {
+	runDirectory, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := bytes.Repeat([]byte("x"), 3*64*1024)
+	if err := os.WriteFile(filepath.Join(runDirectory, "large.log"), contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	readContext := &cancelAfterContextChecks{Context: context.Background(), remaining: 2}
+	if _, err := readArtifactContext(readContext, runDirectory, "large.log"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("readArtifactContext() error = %v, want context.Canceled", err)
+	}
+
+	hashContext := &cancelAfterContextChecks{Context: context.Background(), remaining: 2}
+	if _, _, err := hashArtifactContext(hashContext, runDirectory, "large.log"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("hashArtifactContext() error = %v, want context.Canceled", err)
+	}
+
+	bytesContext := &cancelAfterContextChecks{Context: context.Background(), remaining: 1}
+	if _, err := hashBytesContext(bytesContext, contents); !errors.Is(err, context.Canceled) {
+		t.Fatalf("hashBytesContext() error = %v, want context.Canceled", err)
+	}
+}
+
+type cancelAfterContextChecks struct {
+	context.Context
+	remaining int
+}
+
+func (ctx *cancelAfterContextChecks) Err() error {
+	if ctx.remaining == 0 {
+		return context.Canceled
+	}
+	ctx.remaining--
+	return nil
 }
 
 func TestPhysicalConsumerFilesAreIgnoredAndQueryDoesNotWrite(t *testing.T) {

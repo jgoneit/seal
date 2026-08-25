@@ -2,6 +2,7 @@ package runstate
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -146,6 +148,90 @@ func TestVerifyRecordsTimeoutLaunchFailureAndContinues(t *testing.T) {
 	if summary.Checks[2].ExitCode == nil || summary.Checks[2].ExitCode.String() != "0" || !summary.Checks[2].Passed {
 		t.Fatalf("last pass = %#v", summary.Checks[2])
 	}
+}
+
+func TestVerifyAcceptsTheBasicProfileTimeoutMaximum(t *testing.T) {
+	check := verificationCheck("maximum", "pass", true)
+	check["timeout_seconds"] = json.Number("300")
+	repository, taskID := verificationRepository(t, []map[string]any{check})
+
+	run, err := Verify(repository, taskID)
+	if err != nil {
+		t.Fatalf("Verify(): %v", err)
+	}
+	if _, err := ValidateRun(repository, taskID, run.RunID); err != nil {
+		t.Fatalf("ValidateRun(): %v", err)
+	}
+}
+
+func TestVerifyRejectsSavedTimeoutAboveBasicProfileMaximumBeforeS0(t *testing.T) {
+	tests := []struct {
+		name    string
+		timeout json.Number
+	}{
+		{name: "one second above", timeout: json.Number("301")},
+		{name: "arbitrary precision", timeout: json.Number("999999999999999999999999999999999999999999")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			check := verificationCheck("must not run", "mutate", true)
+			check["timeout_seconds"] = test.timeout
+			repository, taskID := verificationRepository(t, []map[string]any{check})
+			mutateTestJSON(t, filepath.Join(repository, ".seal", "tasks", taskID+".json"), func(task map[string]any) {
+				task["baseline"] = strings.Repeat("f", 40)
+			})
+
+			_, err := Verify(repository, taskID)
+			want := "saved Task snapshot checks[0].timeout_seconds must be at most 300 seconds."
+			if err == nil || KindOf(err) != KindInvalidInput || err.Error() != want {
+				t.Fatalf("Verify() error = %v, kind = %v; want %q", err, KindOf(err), want)
+			}
+			if contents, readErr := os.ReadFile(filepath.Join(repository, "README.md")); readErr != nil || string(contents) != "baseline\n" {
+				t.Fatalf("rejected check ran: README = %q, error = %v", contents, readErr)
+			}
+			assertNoPublishedOrStagingRun(t, filepath.Join(repository, ".seal", "evidence", taskID))
+		})
+	}
+}
+
+func TestVerifyWallClockBudgetIsSharedAcrossChecks(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "completed-checks")
+	repository, taskID := verificationRepository(t, []map[string]any{
+		verificationDelayCheck("first", 1200, marker, "first"),
+		verificationDelayCheck("second", 1200, marker, "second"),
+	})
+
+	prepared, err := prepareVerification(repository, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err = verifyPreparedContext(ctx, prepared, verifyHooks{})
+	if err == nil || KindOf(err) != KindRepository || err.Error() != verificationDeadlineMessage {
+		t.Fatalf("verifyPreparedContext() error = %v, kind = %v; want wall-clock RepositoryError", err, KindOf(err))
+	}
+	contents, readErr := os.ReadFile(marker)
+	if readErr != nil {
+		t.Fatalf("read marker: %v", readErr)
+	}
+	if string(contents) != "first\n" {
+		t.Fatalf("completed checks = %q, want only first check", contents)
+	}
+	assertNoPublishedOrStagingRun(t, filepath.Join(repository, ".seal", "evidence", taskID))
+}
+
+func TestVerifyMapsStreamLimitToRepositoryFailureWithoutPublishing(t *testing.T) {
+	repository, taskID := verificationRepository(t, []map[string]any{
+		verificationOutputCheck("overflow", "stdout-bytes", 8*1024*1024+1),
+	})
+
+	_, err := Verify(repository, taskID)
+	want := "checks[0].stdout exceeded the 8388608-byte safety limit."
+	if err == nil || KindOf(err) != KindRepository || err.Error() != want {
+		t.Fatalf("Verify() error = %v, kind = %v; want %q", err, KindOf(err), want)
+	}
+	assertNoPublishedOrStagingRun(t, filepath.Join(repository, ".seal", "evidence", taskID))
 }
 
 func TestVerifyRecordsScopeViolationAsValidFailedRun(t *testing.T) {
@@ -347,6 +433,53 @@ func TestVerifyPublicationNeverReplacesConcurrentRunWinner(t *testing.T) {
 	assertNoStagingDirectories(t, filepath.Dir(winner))
 }
 
+func TestEvidenceCommitWinsWhenContextIsCanceledAfterNativePublication(t *testing.T) {
+	repository := t.TempDir()
+	runID := strings.Repeat("c", 32)
+	finalDirectory := filepath.Join(repository, ".seal", "evidence", "TASK-PUBLISH-DEADLINE", runID)
+	ctx := cancelWhenPathExistsContext{Context: context.Background(), path: finalDirectory}
+	writer, err := newEvidenceWriter(repository, "TASK-PUBLISH-DEADLINE", verifyHooks{
+		runIDGenerator: func() (string, error) { return runID, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer.ctx = ctx
+	committed := false
+	defer func() {
+		if !committed {
+			_ = writer.abort()
+		}
+	}()
+	if err := writer.write("sentinel", []byte("published\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.commit(); err != nil {
+		t.Fatalf("commit after native publication cancellation: %v", err)
+	}
+	committed = true
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		t.Fatal("publication-aware context did not observe the committed directory")
+	}
+	path := filepath.Join(finalDirectory, "sentinel")
+	contents, err := os.ReadFile(path)
+	if err != nil || string(contents) != "published\n" {
+		t.Fatalf("published sentinel = %q, error = %v", contents, err)
+	}
+}
+
+type cancelWhenPathExistsContext struct {
+	context.Context
+	path string
+}
+
+func (ctx cancelWhenPathExistsContext) Err() error {
+	if _, err := os.Stat(ctx.path); err == nil {
+		return context.Canceled
+	}
+	return ctx.Context.Err()
+}
+
 func TestVerifySurfacesCleanupFailureAndStillAttemptsRemoval(t *testing.T) {
 	repository, taskID := verificationRepository(t, []map[string]any{
 		verificationCheck("pass", "pass", true),
@@ -403,13 +536,16 @@ func TestVerifyManagedCheckHelper(t *testing.T) {
 	if separator < 0 || separator+1 >= len(os.Args) {
 		return
 	}
-	_, _ = os.Stdout.Write([]byte{'r', 'a', 'w', 0x00, 0xff, '\n'})
-	switch os.Args[separator+1] {
+	mode := os.Args[separator+1]
+	switch mode {
 	case "pass":
+		_, _ = os.Stdout.Write([]byte{'r', 'a', 'w', 0x00, 0xff, '\n'})
 		os.Exit(0)
 	case "fail":
+		_, _ = os.Stdout.Write([]byte{'r', 'a', 'w', 0x00, 0xff, '\n'})
 		os.Exit(17)
 	case "mutate":
+		_, _ = os.Stdout.Write([]byte{'r', 'a', 'w', 0x00, 0xff, '\n'})
 		if separator+2 >= len(os.Args) {
 			os.Exit(96)
 		}
@@ -419,10 +555,78 @@ func TestVerifyManagedCheckHelper(t *testing.T) {
 		}
 		os.Exit(0)
 	case "sleep":
+		_, _ = os.Stdout.Write([]byte{'r', 'a', 'w', 0x00, 0xff, '\n'})
 		time.Sleep(10 * time.Second)
+		os.Exit(0)
+	case "delay-marker":
+		if separator+4 >= len(os.Args) {
+			os.Exit(96)
+		}
+		delay, err := strconv.Atoi(os.Args[separator+2])
+		if err != nil {
+			os.Exit(96)
+		}
+		time.Sleep(time.Duration(delay) * time.Millisecond)
+		file, err := os.OpenFile(os.Args[separator+3], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+		if err != nil {
+			os.Exit(96)
+		}
+		_, writeErr := fmt.Fprintln(file, os.Args[separator+4])
+		closeErr := file.Close()
+		if writeErr != nil || closeErr != nil {
+			os.Exit(96)
+		}
+		os.Exit(0)
+	case "stdout-bytes", "stderr-bytes":
+		if separator+2 >= len(os.Args) {
+			os.Exit(96)
+		}
+		count, err := strconv.Atoi(os.Args[separator+2])
+		if err != nil || count < 0 {
+			os.Exit(96)
+		}
+		writer := os.Stdout
+		if mode == "stderr-bytes" {
+			writer = os.Stderr
+		}
+		chunk := make([]byte, 64*1024)
+		for count > 0 {
+			length := len(chunk)
+			if count < length {
+				length = count
+			}
+			written, err := writer.Write(chunk[:length])
+			if err != nil {
+				os.Exit(96)
+			}
+			count -= written
+		}
 		os.Exit(0)
 	default:
 		os.Exit(95)
+	}
+}
+
+func verificationDelayCheck(name string, milliseconds int, marker, value string) map[string]any {
+	return map[string]any{
+		"name": name,
+		"argv": []any{
+			os.Args[0], "-test.run=^TestVerifyManagedCheckHelper$", "--",
+			"delay-marker", strconv.Itoa(milliseconds), marker, value,
+		},
+		"required":        true,
+		"timeout_seconds": json.Number("5"),
+	}
+}
+
+func verificationOutputCheck(name, mode string, bytes int) map[string]any {
+	return map[string]any{
+		"name": name,
+		"argv": []any{
+			os.Args[0], "-test.run=^TestVerifyManagedCheckHelper$", "--", mode, strconv.Itoa(bytes),
+		},
+		"required":        true,
+		"timeout_seconds": json.Number("30"),
 	}
 }
 

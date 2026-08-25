@@ -3,6 +3,7 @@
 package checkrun
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -94,6 +95,58 @@ func TestSuccessfulParentCleansBackgroundDescendant(t *testing.T) {
 	assertWindowsProcessExited(t, child)
 }
 
+func TestContextDeadlineTerminatesWindowsProcessTree(t *testing.T) {
+	repository := t.TempDir()
+	evidenceRoot := openTestRoot(t, privateTempDirectory(t))
+	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
+	t.Setenv("SEAL_CHECKRUN_WINDOWS_TREE_HELPER", "1")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	runDone := make(chan windowsTreeRunResult, 1)
+	go func() {
+		results, err := RunRootedContext(ctx, []Definition{{
+			Name:           "context tree",
+			Argv:           windowsTreeHelperArgv("tree-parent-block", childPIDPath),
+			Required:       true,
+			TimeoutSeconds: big.NewInt(MaxTimeoutSeconds),
+		}}, repository, evidenceRoot)
+		runDone <- windowsTreeRunResult{results: results, err: err}
+	}()
+
+	child := openWindowsHelperProcess(t, childPIDPath)
+	defer windows.CloseHandle(child)
+	outcome := waitForWindowsTreeRun(t, runDone)
+	assertResourceLimit(t, outcome.err, WallClockResourceLimitMessage)
+	assertWindowsProcessExited(t, child)
+}
+
+func TestOutputLimitTerminatesWindowsProcessTree(t *testing.T) {
+	repository := t.TempDir()
+	evidence := privateTempDirectory(t)
+	evidenceRoot := openTestRoot(t, evidence)
+	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
+	t.Setenv("SEAL_CHECKRUN_WINDOWS_TREE_HELPER", "1")
+
+	runDone := make(chan windowsTreeRunResult, 1)
+	go func() {
+		results, err := RunRooted([]Definition{{
+			Name:           "output tree",
+			Argv:           windowsTreeHelperArgv("tree-parent-output", childPIDPath),
+			Required:       true,
+			TimeoutSeconds: big.NewInt(MaxTimeoutSeconds),
+		}}, repository, evidenceRoot)
+		runDone <- windowsTreeRunResult{results: results, err: err}
+	}()
+
+	child := openWindowsHelperProcess(t, childPIDPath)
+	defer windows.CloseHandle(child)
+	outcome := waitForWindowsTreeRun(t, runDone)
+	assertResourceLimit(t, outcome.err, fmt.Sprintf(StdoutResourceLimitFormat, 0))
+	assertFileSize(t, filepath.Join(evidence, "checks", outputStem(0, "output tree")+".stdout"), MaxStreamOutputBytes)
+	assertWindowsProcessExited(t, child)
+}
+
 func TestRunDoesNotInheritUnlistedHandle(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
@@ -167,7 +220,7 @@ func TestWindowsProcessTreeHelperProcess(t *testing.T) {
 		os.Exit(89)
 	}
 	switch arguments[0] {
-	case "tree-parent-block", "tree-parent-exit":
+	case "tree-parent-block", "tree-parent-exit", "tree-parent-output":
 		if len(arguments) < 2 {
 			os.Exit(88)
 		}
@@ -195,6 +248,22 @@ func TestWindowsProcessTreeHelperProcess(t *testing.T) {
 		if arguments[0] == "tree-parent-exit" {
 			if len(arguments) != 3 || !waitForWindowsHelperPath(arguments[2]) {
 				os.Exit(85)
+			}
+			os.Exit(0)
+		}
+		if arguments[0] == "tree-parent-output" {
+			remaining := MaxStreamOutputBytes + 1
+			chunk := make([]byte, 64*1024)
+			for remaining > 0 {
+				length := int64(len(chunk))
+				if remaining < length {
+					length = remaining
+				}
+				written, err := os.Stdout.Write(chunk[:int(length)])
+				if err != nil {
+					os.Exit(81)
+				}
+				remaining -= int64(written)
 			}
 			os.Exit(0)
 		}
