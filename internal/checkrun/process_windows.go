@@ -33,7 +33,7 @@ func startProcess(
 ) (managedProcess, error) {
 	stdinFile, ok := stdin.(*os.File)
 	if !ok {
-		return nil, fmt.Errorf("inherited stdin is not an operating-system file")
+		return nil, fmt.Errorf("check stdin is not an operating-system file")
 	}
 	job, err := createWindowsJob()
 	if err != nil {

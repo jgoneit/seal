@@ -3,6 +3,7 @@
 package runstate
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -250,11 +251,29 @@ func validateRunAt(
 	runID string,
 	runDirectory string,
 ) (*ValidatedRun, error) {
-	documents, err := validateDocuments(runDirectory, task, taskID, runID)
+	return validateRunAtContext(context.Background(), repository, task, taskID, runID, runDirectory)
+}
+
+func validateRunAtContext(
+	ctx context.Context,
+	repository string,
+	task jsonObject,
+	taskID string,
+	runID string,
+	runDirectory string,
+) (*ValidatedRun, error) {
+	if err := artifactContextError(ctx); err != nil {
+		return nil, err
+	}
+	documents, err := validateDocumentsContext(ctx, runDirectory, task, taskID, runID)
 	if err != nil {
 		return nil, err
 	}
-	evidenceSHA256, err := validateManifest(
+	if err := artifactContextError(ctx); err != nil {
+		return nil, err
+	}
+	evidenceSHA256, err := validateManifestContext(
+		ctx,
 		runDirectory,
 		taskID,
 		runID,
@@ -263,9 +282,15 @@ func validateRunAt(
 	if err != nil {
 		return nil, err
 	}
+	if err := artifactContextError(ctx); err != nil {
+		return nil, err
+	}
 	runDirectoryInfo, err := os.Stat(runDirectory)
 	if err != nil || !runDirectoryInfo.IsDir() {
 		return nil, &EvidenceError{message: "Validated Evidence Run directory became unavailable."}
+	}
+	if err := artifactContextError(ctx); err != nil {
+		return nil, err
 	}
 
 	return &ValidatedRun{

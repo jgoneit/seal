@@ -1,6 +1,7 @@
 package runstate
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,11 @@ import (
 
 	"github.com/jgoneit/seal/internal/checkrun"
 	"github.com/jgoneit/seal/internal/sourceobs"
+)
+
+const (
+	verificationWallClockBudget = 600 * time.Second
+	verificationDeadlineMessage = "Verification exceeded the 600-second wall-clock safety budget."
 )
 
 // VerificationRun identifies one completely published Evidence Run.
@@ -37,7 +43,13 @@ func (run VerificationRun) ReferenceJSON() ([]byte, error) {
 // evidence, and atomically publishes one manifest-complete Run directory.
 // Check and Scope failures are recorded evidence and do not make Verify fail.
 func Verify(cwd, taskID string) (*VerificationRun, error) {
-	return verifyWithHooks(cwd, taskID, verifyHooks{})
+	prepared, err := prepareVerification(cwd, taskID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), verificationWallClockBudget)
+	defer cancel()
+	return verifyPreparedContext(ctx, prepared, verifyHooks{})
 }
 
 type verifyHooks struct {
@@ -45,32 +57,81 @@ type verifyHooks struct {
 	runIDGenerator func() (string, error)
 }
 
-func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (result *VerificationRun, resultErr error) {
+type preparedVerification struct {
+	repository     string
+	taskID         string
+	task           jsonObject
+	taskDefinition taskFacts
+	checks         []checkrun.Definition
+}
+
+func prepareVerification(cwd, taskID string) (preparedVerification, error) {
 	if err := validateIdentity(taskID, "Task"); err != nil {
-		return nil, err
+		return preparedVerification{}, err
 	}
 	repository, err := findRepositoryRoot(cwd)
 	if err != nil {
-		return nil, err
+		return preparedVerification{}, err
 	}
 	task, err := readSavedTask(repository, taskID)
 	if err != nil {
-		return nil, err
+		return preparedVerification{}, err
 	}
 	taskDefinition, err := parseTaskFacts(task, taskID, "saved Task snapshot")
 	if err != nil {
-		return nil, err
+		return preparedVerification{}, err
 	}
 	checks, err := verificationChecks(taskDefinition)
 	if err != nil {
+		return preparedVerification{}, err
+	}
+	return preparedVerification{
+		repository:     repository,
+		taskID:         taskID,
+		task:           task,
+		taskDefinition: taskDefinition,
+		checks:         checks,
+	}, nil
+}
+
+func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (*VerificationRun, error) {
+	prepared, err := prepareVerification(cwd, taskID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), verificationWallClockBudget)
+	defer cancel()
+	return verifyPreparedContext(ctx, prepared, hooks)
+}
+
+// verifyPreparedContext starts at the Basic Profile admission boundary. The
+// fixed public Verify deadline is created only after prepareVerification has
+// validated the saved Task and every resolved check definition.
+func verifyPreparedContext(
+	ctx context.Context,
+	prepared preparedVerification,
+	hooks verifyHooks,
+) (result *VerificationRun, resultErr error) {
+	if ctx == nil {
+		return nil, &RepositoryError{message: verificationDeadlineMessage}
+	}
+	repository := prepared.repository
+	taskID := prepared.taskID
+	task := prepared.task
+	taskDefinition := prepared.taskDefinition
+	checks := prepared.checks
+	started := time.Now()
+	if err := verificationContextError(ctx); err != nil {
 		return nil, err
 	}
 	taskBytes, err := renderEvidenceJSON(map[string]any(task))
 	if err != nil {
 		return nil, &RuntimeError{message: "Saved Task snapshot could not be rendered as UTF-8."}
 	}
+	if err := verificationContextError(ctx); err != nil {
+		return nil, err
+	}
 
-	started := time.Now()
 	snapshotRequest := sourceobs.SnapshotRequest{
 		CWD:      repository,
 		Baseline: taskDefinition.baseline,
@@ -80,15 +141,25 @@ func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (result *Verificatio
 		Baseline: taskDefinition.baseline,
 		Scope:    append([]string(nil), taskDefinition.scope...),
 	}
-	before, err := sourceobs.ObserveSnapshot(snapshotRequest)
+	before, err := sourceobs.ObserveSnapshotContext(ctx, snapshotRequest)
 	if err != nil {
+		if contextErr := verificationContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
 		return nil, mapSourceObservationError(err)
+	}
+	if err := verificationContextError(ctx); err != nil {
+		return nil, err
 	}
 
 	writer, err := newEvidenceWriter(repository, taskID, hooks)
 	if err != nil {
+		if contextErr := verificationContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
 		return nil, err
 	}
+	writer.ctx = ctx
 	committed := false
 	defer func() {
 		if !committed {
@@ -102,17 +173,29 @@ func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (result *Verificatio
 	if err := writer.write("task.json", taskBytes); err != nil {
 		return nil, err
 	}
-	checkResults, err := checkrun.RunRooted(checks, repository, writer.staging)
+	checkResults, err := checkrun.RunRootedContext(ctx, checks, repository, writer.staging)
 	if err != nil {
+		if contextErr := verificationContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
 		return nil, mapCheckRunError(err)
 	}
-	after, err := sourceobs.ObserveSnapshot(snapshotRequest)
+	after, err := sourceobs.ObserveSnapshotContext(ctx, snapshotRequest)
 	if err != nil {
+		if contextErr := verificationContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
 		return nil, mapSourceObservationError(err)
 	}
-	observedChanges, err := sourceobs.ObserveChanges(changesRequest)
+	observedChanges, err := sourceobs.ObserveChangesContext(ctx, changesRequest)
 	if err != nil {
+		if contextErr := verificationContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
 		return nil, mapSourceObservationError(err)
+	}
+	if err := verificationContextError(ctx); err != nil {
+		return nil, err
 	}
 
 	checksDocument, err := renderChecksDocument(checkResults)
@@ -171,11 +254,23 @@ func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (result *Verificatio
 	if err := writer.inject("self-validate"); err != nil {
 		return nil, err
 	}
+	if err := verificationContextError(ctx); err != nil {
+		return nil, err
+	}
 	if err := writer.validateStagingBinding(); err != nil {
 		return nil, err
 	}
-	if _, err := validateRunAt(repository, task, taskID, writer.runID, writer.stagingPath()); err != nil {
+	if err := verificationContextError(ctx); err != nil {
+		return nil, err
+	}
+	if _, err := validateRunAtContext(ctx, repository, task, taskID, writer.runID, writer.stagingPath()); err != nil {
+		if contextErr := verificationContextError(ctx); contextErr != nil {
+			return nil, contextErr
+		}
 		return nil, &RepositoryError{message: "Generated Evidence failed its own integrity validation: " + err.Error()}
+	}
+	if err := verificationContextError(ctx); err != nil {
+		return nil, err
 	}
 	if err := writer.validateStagingBinding(); err != nil {
 		return nil, err
@@ -191,6 +286,13 @@ func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (result *Verificatio
 	}, nil
 }
 
+func verificationContextError(ctx context.Context) error {
+	if ctx != nil && ctx.Err() != nil {
+		return &RepositoryError{message: verificationDeadlineMessage}
+	}
+	return nil
+}
+
 func verificationChecks(task taskFacts) ([]checkrun.Definition, error) {
 	checks := make([]checkrun.Definition, len(task.checks))
 	for index, saved := range task.checks {
@@ -204,6 +306,12 @@ func verificationChecks(task taskFacts) ([]checkrun.Definition, error) {
 		if !ok || timeout.Sign() <= 0 {
 			return nil, &IdentityError{message: fmt.Sprintf(
 				"saved Task snapshot checks[%d].timeout_seconds must be a positive integer.",
+				index,
+			)}
+		}
+		if timeout.Cmp(big.NewInt(checkrun.MaxTimeoutSeconds)) > 0 {
+			return nil, &IdentityError{message: fmt.Sprintf(
+				"saved Task snapshot checks[%d].timeout_seconds must be at most 300 seconds.",
 				index,
 			)}
 		}

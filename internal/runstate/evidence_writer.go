@@ -1,6 +1,7 @@
 package runstate
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 const runAllocationAttempts = 100
 
 type evidenceWriter struct {
+	ctx         context.Context
 	repository  string
 	taskID      string
 	runID       string
@@ -211,10 +213,16 @@ func (writer *evidenceWriter) validateStagingBinding() error {
 }
 
 func (writer *evidenceWriter) write(path string, contents []byte) error {
+	if err := writer.contextError(); err != nil {
+		return err
+	}
 	if _, err := safeRunPath(path, "Evidence output path"); err != nil {
 		return &RepositoryError{message: err.Error()}
 	}
 	if err := writer.inject("write:" + path); err != nil {
+		return err
+	}
+	if err := writer.contextError(); err != nil {
 		return err
 	}
 	file, err := writer.staging.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -224,24 +232,59 @@ func (writer *evidenceWriter) write(path string, contents []byte) error {
 	writeErr := error(nil)
 	if err := file.Chmod(0o600); err != nil {
 		writeErr = err
-	} else if _, err := file.Write(contents); err != nil {
+	} else if err := writer.writeBytes(file, contents); err != nil {
 		writeErr = err
 	} else if err := writer.inject("sync-file:" + path); err != nil {
 		writeErr = err
+	} else if err := writer.contextError(); err != nil {
+		writeErr = err
 	} else if err := file.Sync(); err != nil {
+		writeErr = err
+	} else if err := writer.contextError(); err != nil {
 		writeErr = err
 	}
 	if err := file.Close(); writeErr == nil {
 		writeErr = err
 	}
 	if writeErr != nil {
+		if contextErr := writer.contextError(); contextErr != nil {
+			return contextErr
+		}
 		return &RepositoryError{message: "Could not persist Evidence file: " + path + "."}
 	}
 	return nil
 }
 
+func (writer *evidenceWriter) writeBytes(file *os.File, contents []byte) error {
+	const writeChunkSize = 64 * 1024
+	for len(contents) > 0 {
+		if err := writer.contextError(); err != nil {
+			return err
+		}
+		chunk := contents
+		if len(chunk) > writeChunkSize {
+			chunk = chunk[:writeChunkSize]
+		}
+		written, err := file.Write(chunk)
+		if err != nil {
+			return err
+		}
+		if written == 0 {
+			return io.ErrShortWrite
+		}
+		contents = contents[written:]
+	}
+	return nil
+}
+
 func (writer *evidenceWriter) writeManifest(evidenceFiles []string) error {
+	if err := writer.contextError(); err != nil {
+		return err
+	}
 	if err := writer.inject("manifest"); err != nil {
+		return err
+	}
+	if err := writer.contextError(); err != nil {
 		return err
 	}
 	paths := append([]string(nil), evidenceFiles...)
@@ -249,20 +292,25 @@ func (writer *evidenceWriter) writeManifest(evidenceFiles []string) error {
 	records := make([]any, len(paths))
 	seen := make(map[string]struct{}, len(paths))
 	for index, path := range paths {
+		if err := writer.contextError(); err != nil {
+			return err
+		}
 		if _, duplicate := seen[path]; duplicate {
 			return &RepositoryError{message: "Generated Evidence file list contains a duplicate: " + path + "."}
 		}
 		seen[path] = struct{}{}
-		contents, err := writer.readRegular(path)
+		size, digest, err := writer.hashRegular(path)
 		if err != nil {
 			return err
 		}
-		digest := sha256.Sum256(contents)
 		records[index] = map[string]any{
 			"path":       path,
-			"size_bytes": json.Number(strconv.Itoa(len(contents))),
-			"sha256":     hex.EncodeToString(digest[:]),
+			"size_bytes": json.Number(strconv.FormatInt(size, 10)),
+			"sha256":     digest,
 		}
+	}
+	if err := writer.contextError(); err != nil {
+		return err
 	}
 	checksDirectory, err := writer.staging.OpenRoot("checks")
 	if err != nil {
@@ -270,6 +318,9 @@ func (writer *evidenceWriter) writeManifest(evidenceFiles []string) error {
 	}
 	checksSyncError := syncDirectory(checksDirectory)
 	checksCloseError := checksDirectory.Close()
+	if err := writer.contextError(); err != nil {
+		return err
+	}
 	if checksSyncError != nil || checksCloseError != nil {
 		return &RepositoryError{message: "Could not synchronize the generated check log directory."}
 	}
@@ -299,35 +350,81 @@ func (writer *evidenceWriter) writeManifest(evidenceFiles []string) error {
 	return writer.write("run-manifest.json", encoded)
 }
 
-func (writer *evidenceWriter) readRegular(path string) ([]byte, error) {
+func (writer *evidenceWriter) hashRegular(path string) (int64, string, error) {
+	if err := writer.contextError(); err != nil {
+		return 0, "", err
+	}
 	if _, err := safeRunPath(path, "Evidence manifest path"); err != nil {
-		return nil, &RepositoryError{message: err.Error()}
+		return 0, "", &RepositoryError{message: err.Error()}
 	}
 	info, err := writer.staging.Lstat(path)
 	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return nil, &RepositoryError{message: "Generated Evidence file is missing or unsafe: " + path + "."}
+		return 0, "", &RepositoryError{message: "Generated Evidence file is missing or unsafe: " + path + "."}
 	}
 	file, err := writer.staging.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
-		return nil, &RepositoryError{message: "Could not read generated Evidence file: " + path + "."}
+		return 0, "", &RepositoryError{message: "Could not read generated Evidence file: " + path + "."}
 	}
 	if err := writer.inject("sync-manifest-file:" + path); err != nil {
 		_ = file.Close()
-		return nil, err
+		return 0, "", err
 	}
-	if err := file.Sync(); err != nil {
+	if err := writer.contextError(); err != nil {
 		_ = file.Close()
-		return nil, &RepositoryError{message: "Could not synchronize generated Evidence file: " + path + "."}
+		return 0, "", err
 	}
-	contents, readErr := io.ReadAll(file)
+	syncErr := file.Sync()
+	if err := writer.contextError(); err != nil {
+		_ = file.Close()
+		return 0, "", err
+	}
+	if syncErr != nil {
+		_ = file.Close()
+		return 0, "", &RepositoryError{message: "Could not synchronize generated Evidence file: " + path + "."}
+	}
+	digest := sha256.New()
+	buffer := make([]byte, 64*1024)
+	var size int64
+	var readErr error
+	for {
+		if err := writer.contextError(); err != nil {
+			readErr = err
+			break
+		}
+		count, err := file.Read(buffer)
+		if count > 0 {
+			_, _ = digest.Write(buffer[:count])
+			size += int64(count)
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			readErr = err
+			break
+		}
+	}
 	closeErr := file.Close()
-	if readErr != nil || closeErr != nil {
-		return nil, &RepositoryError{message: "Could not read generated Evidence file: " + path + "."}
+	if readErr != nil {
+		var repositoryError *RepositoryError
+		if errors.As(readErr, &repositoryError) {
+			return 0, "", readErr
+		}
+		return 0, "", &RepositoryError{message: "Could not read generated Evidence file: " + path + "."}
 	}
-	return contents, nil
+	if closeErr != nil {
+		return 0, "", &RepositoryError{message: "Could not read generated Evidence file: " + path + "."}
+	}
+	if err := writer.contextError(); err != nil {
+		return 0, "", err
+	}
+	return size, hex.EncodeToString(digest.Sum(nil)), nil
 }
 
 func (writer *evidenceWriter) commit() error {
+	if err := writer.contextError(); err != nil {
+		return err
+	}
 	if writer.staging == nil {
 		return &RepositoryError{message: "Evidence staging directory is not open."}
 	}
@@ -337,7 +434,14 @@ func (writer *evidenceWriter) commit() error {
 	if err := writer.inject("sync-staging-directory"); err != nil {
 		return err
 	}
-	if err := syncDirectory(writer.staging); err != nil {
+	if err := writer.contextError(); err != nil {
+		return err
+	}
+	stagingSyncErr := syncDirectory(writer.staging)
+	if err := writer.contextError(); err != nil {
+		return err
+	}
+	if stagingSyncErr != nil {
 		return &RepositoryError{message: "Could not synchronize the Evidence staging directory."}
 	}
 	if err := writer.staging.Close(); err != nil {
@@ -347,10 +451,20 @@ func (writer *evidenceWriter) commit() error {
 	if err := writer.inject("sync-publication-parent"); err != nil {
 		return err
 	}
-	if err := syncDirectory(writer.parent); err != nil {
+	if err := writer.contextError(); err != nil {
+		return err
+	}
+	parentSyncErr := syncDirectory(writer.parent)
+	if err := writer.contextError(); err != nil {
+		return err
+	}
+	if parentSyncErr != nil {
 		return &RepositoryError{message: "Could not synchronize the Evidence publication directory."}
 	}
 	if err := writer.inject("publish"); err != nil {
+		return err
+	}
+	if err := writer.contextError(); err != nil {
 		return err
 	}
 	if err := publishDirectoryNoReplace(writer.parent, writer.stagingName, writer.runID, writer.stagingInfo); err != nil {
@@ -362,6 +476,10 @@ func (writer *evidenceWriter) commit() error {
 	writer.parent = nil
 	writer.root = nil
 	return nil
+}
+
+func (writer *evidenceWriter) contextError() error {
+	return verificationContextError(writer.ctx)
 }
 
 func (writer *evidenceWriter) inject(point string) error {

@@ -4,6 +4,7 @@
 package sourceobs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -148,25 +149,49 @@ func (result ChangeResult) DiffPatch() []byte { return append([]byte(nil), resul
 // Complete S2. It does not inspect Scope, collect layered changes, or run a
 // patch-producing Git command.
 func ObserveSnapshot(request SnapshotRequest) (SnapshotResult, error) {
-	context, err := resolveContext(request.CWD, request.Baseline)
+	return ObserveSnapshotContext(context.Background(), request)
+}
+
+// ObserveSnapshotContext is ObserveSnapshot with cooperative cancellation for
+// Git subprocesses and source scanning and hashing work.
+func ObserveSnapshotContext(ctx context.Context, request SnapshotRequest) (SnapshotResult, error) {
+	if err := contextFailure(ctx); err != nil {
+		return SnapshotResult{}, err
+	}
+	repository, err := resolveContext(ctx, request.CWD, request.Baseline)
 	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return SnapshotResult{}, contextErr
+		}
 		return SnapshotResult{}, err
 	}
 	baselineBlobs := make(map[string]blobIdentity)
-	first, err := collectSnapshotObservation(context, baselineBlobs)
+	first, err := collectSnapshotObservation(ctx, repository, baselineBlobs)
 	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return SnapshotResult{}, contextErr
+		}
 		return SnapshotResult{}, err
 	}
-	second, err := collectSnapshotObservation(context, baselineBlobs)
+	second, err := collectSnapshotObservation(ctx, repository, baselineBlobs)
 	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return SnapshotResult{}, contextErr
+		}
+		return SnapshotResult{}, err
+	}
+	if err := contextFailure(ctx); err != nil {
 		return SnapshotResult{}, err
 	}
 	if !reflect.DeepEqual(first, second) {
 		return SnapshotResult{}, unstable("Product source changed while the source snapshot was being collected.", nil)
 	}
 
-	snapshot, snapshotJSON, err := buildSnapshot(context.baseline, second.entries)
+	snapshot, snapshotJSON, err := buildSnapshot(repository.baseline, second.entries)
 	if err != nil {
+		return SnapshotResult{}, err
+	}
+	if err := contextFailure(ctx); err != nil {
 		return SnapshotResult{}, err
 	}
 	return SnapshotResult{snapshot: snapshot, snapshotJSON: snapshotJSON}, nil
@@ -175,24 +200,48 @@ func ObserveSnapshot(request SnapshotRequest) (SnapshotResult, error) {
 // ObserveChanges collects layered changed-files state and the raw binary diff
 // after Verify S1. It does not collect a Source Snapshot.
 func ObserveChanges(request Request) (ChangeResult, error) {
+	return ObserveChangesContext(context.Background(), request)
+}
+
+// ObserveChangesContext is ObserveChanges with cooperative cancellation for
+// Git subprocesses and source-change iteration.
+func ObserveChangesContext(ctx context.Context, request Request) (ChangeResult, error) {
+	if err := contextFailure(ctx); err != nil {
+		return ChangeResult{}, err
+	}
 	scope, err := validateScope(request.Scope)
 	if err != nil {
 		return ChangeResult{}, err
 	}
-	context, err := resolveContext(request.CWD, request.Baseline)
+	repository, err := resolveContext(ctx, request.CWD, request.Baseline)
 	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return ChangeResult{}, contextErr
+		}
 		return ChangeResult{}, err
 	}
-	changes, err := collectChanges(context, scope)
+	changes, err := collectChanges(ctx, repository, scope)
 	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return ChangeResult{}, contextErr
+		}
 		return ChangeResult{}, err
 	}
 	changedFilesJSON, err := renderChangedFiles(changes)
 	if err != nil {
 		return ChangeResult{}, repositoryFailure("Could not render changed-files JSON.", err)
 	}
-	diffPatch, err := collectDiffPatch(context, changes)
+	if err := contextFailure(ctx); err != nil {
+		return ChangeResult{}, err
+	}
+	diffPatch, err := collectDiffPatch(ctx, repository, changes)
 	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return ChangeResult{}, contextErr
+		}
+		return ChangeResult{}, err
+	}
+	if err := contextFailure(ctx); err != nil {
 		return ChangeResult{}, err
 	}
 	return ChangeResult{changes: changes, changedFilesJSON: changedFilesJSON, diffPatch: diffPatch}, nil
@@ -286,4 +335,18 @@ func repositoryFailure(message string, cause error) error {
 
 func unstable(message string, cause error) error {
 	return &Error{kind: UnstableSource, message: message, cause: cause}
+}
+
+func contextFailure(ctx context.Context) error {
+	if ctx == nil {
+		return repositoryFailure("Source observation context must not be nil.", nil)
+	}
+	err := ctx.Err()
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return repositoryFailure("Source observation deadline was exceeded.", err)
+	}
+	return repositoryFailure("Source observation was canceled.", err)
 }
