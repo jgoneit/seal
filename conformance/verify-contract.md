@@ -9,8 +9,8 @@ seal verify <TASK_ID>
 The behavioral reference is Seal Legacy Core `0.3.0.dev0` at
 `94bb931a7934efe31549d4c21dc7153e43f27a08`. The Go implementation reproduces
 the persisted Task, checks, source, Scope, verification, and manifest meanings,
-with the explicitly approved writer-safety and whole-directory publication
-differences below.
+with the explicitly approved execution-resource, writer-safety, and
+whole-directory publication differences below.
 
 ## Public result and exits
 
@@ -31,8 +31,8 @@ The handled exit categories are:
 | Exit | Meaning |
 | --- | --- |
 | `0` | one complete Run was committed |
-| `2` | CLI, Task identity, saved Task, or check-definition failure |
-| `3` | Git, source observation, check infrastructure, or publication failure |
+| `2` | CLI, Task identity, saved Task, or check-definition failure, including a saved effective timeout above 300 seconds |
+| `3` | Git, source observation, check infrastructure, execution-bound, or publication failure |
 | `1` | supported runtime-representation or success-stdout failure |
 
 Handled state and execution failures write no stdout and one `error: ...` line
@@ -40,6 +40,18 @@ to stderr. CLI shape failures write that error followed by the shared usage
 synopsis. A stdout failure after commit returns `1` and does not roll back the
 already published Run. Verify never returns Completion exits `4` through `9`
 for mechanical outcomes.
+
+The Basic execution boundary uses these exact handled messages before the CLI
+adds its `error: ` prefix:
+
+```text
+saved Task snapshot checks[N].timeout_seconds must be at most 300 seconds.
+Verification exceeded the 600-second wall-clock safety budget.
+checks[N].stdout exceeded the 8388608-byte safety limit.
+checks[N].stderr exceeded the 8388608-byte safety limit.
+Verification check logs exceeded the 33554432-byte aggregate safety limit.
+checks[N] output pipes did not close after process termination.
+```
 
 The command accepts one positional Task identity and no feature flags.
 `-h`/`--help` short-circuits like the frozen parser. `--base-ref`, latest-Run
@@ -72,19 +84,50 @@ final rename are approved Go writer divergences. The frozen writer may allocate
 an incomplete public Run before detecting some Task or later repository
 failures.
 
+One cumulative 600-second Verify deadline starts immediately after the saved
+Task and all saved check definitions pass admission validation, before S0. It
+covers source observation, every check, change collection, artifact creation,
+and all other work before native publication begins. Deadline expiry before
+that commit boundary terminates any current managed check tree, aborts the
+private staging Run, and returns exit `3` without publishing a Run. Once native
+publication begins, the commit result takes precedence over a concurrently
+expiring deadline. Generated Evidence self-validation reads and hashes files in
+bounded chunks with deadline checks between chunks.
+
 ## Check execution
 
-- Checks execute sequentially in saved order with explicit argv and no shell.
-- The repository root is cwd. Environment and stdin are inherited.
-- The default timeout is exactly 300 seconds; a saved positive arbitrary-size
-  integer remains the exact recorded effective timeout.
-- Stdout and stderr are raw, unbounded byte streams in private `0600` files.
-  No text decoding, newline conversion, or truncation is applied.
+- Checks execute sequentially in saved order with explicit argv and no implicit
+  shell. A saved argv may itself name a shell, but the runner never constructs
+  or interprets a shell command string.
+- The repository root is cwd. The caller's environment is inherited unchanged.
+  Stdin is the platform null device, so reads receive noninteractive EOF rather
+  than caller input.
+- The default and maximum effective timeout are exactly 300 seconds. A saved
+  positive timeout at or below 300 remains exact; a larger saved effective
+  timeout is rejected before S0 or private staging with exit `2`. It is never
+  clamped or recorded as a timed-out check.
+- Stdout and stderr remain raw byte streams in private `0600` files. Each
+  stream accepts at most 8,388,608 bytes, and all check log streams in one
+  Verify accept at most 33,554,432 bytes in aggregate. Exactly the cap is
+  valid. The first byte beyond either cap terminates the current managed
+  process tree and aborts Verify with exit `3`, no published Run, and no
+  truncated log or truncation marker.
 - A nonzero exit, timeout, or launch failure is a failed check result and does
   not stop later checks. A launch failure records `exit_code: null` and an
   explanatory raw stderr line.
+- A per-check timeout is an ordinary recorded check outcome and later checks
+  continue. The cumulative Verify deadline or a log-limit overflow instead
+  aborts the entire unpublished Run.
+- After a managed process tree is terminated, collectors receive up to one
+  second to drain and close both output pipes. If a deliberately escaped
+  descendant still holds a pipe, the runner closes its readers and aborts the
+  unpublished Run rather than hanging or publishing a truncated successful
+  log.
 - POSIX uses a new session and process-group TERM, 200 ms grace, then KILL. It
-  also terminates descendants left after a successful root exit.
+  also terminates ordinary descendants left after a successful root exit. A
+  descendant that deliberately creates a new session can escape portable
+  process-group ownership, but the bounded pipe drain prevents it from holding
+  Verify open.
 - Windows creates the process suspended, assigns it to a kill-on-close Job,
   and resumes only after assignment. Job creation, assignment, or resume
   failure is recorded as launch failure; there is no shell or `taskkill`
@@ -121,6 +164,18 @@ hidden index state (`skip-worktree` or `assume-unchanged`), changed gitlinks,
 invalid UTF-8 paths, special filesystem nodes, and Windows reparse points not
 represented as supported Git symlinks. Git is always invoked with explicit
 argv and replace-object processing disabled.
+
+Source observation cooperates with the cumulative Verify deadline. Git
+subprocesses receive the deadline context. POSIX Git runs in a private session;
+Windows Git starts suspended and resumes only after joining a non-breakaway
+kill-on-close Job. Git output-pipe waiting is bounded to one second so a
+deliberately session-escaped POSIX descendant cannot hold Verify open, although
+portable process-group APIs cannot terminate that escaped process itself. File
+walking and hashing check for cancellation between operations. An individual
+filesystem syscall blocked inside the operating system is not made preemptible
+by that cooperative Go context; the 600-second deadline is therefore a bounded
+orchestration contract, not a guarantee that every hostile or stalled
+filesystem returns on time.
 
 ## Complete Run artifacts
 
@@ -190,7 +245,8 @@ mechanical-result, and manifest-digest semantics.
   fallback.
 - A failure before the native rename removes the bound staging directory and
   never creates a final Run. Injected write, sync, manifest, validation, and
-  publication failures are regression-tested for this outcome.
+  publication failures, cumulative deadline expiry, and check-log overflow are
+  regression-tested for this outcome.
 - If cleanup itself also fails, the call returns repository exit `3`; a private
   `.tmp-*` directory may remain, but no final Run is reported. Cleanup never
   deletes a different object after a detected staging-name swap.
@@ -212,3 +268,6 @@ inside the tested boundary.
 Verify does not collect S2, decide Completion, write completion state, read or
 write Verdict, execute a reviewer, infer latest identities, retry or repair a
 Run, truncate Evidence, install Git, or invoke another Toolkit module.
+The execution bounds do not impose CPU or memory quotas, restrict network
+access, filter or allowlist inherited environment variables, sandbox Source
+writes, or add Reviewer or Verdict behavior.
