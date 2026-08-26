@@ -96,6 +96,11 @@ The Native Agent still performs the work normally. The Skill creates the Task
 before implementation, carries exact Task and Run identities, and reports
 `verify`, `run show`, and Basic `complete` as distinct results. It does not add
 approval stages, retry or repair loops, Reviewer behavior, or workflow state.
+Malformed or unresolved selected checks and Core-unsupported timeouts block
+every new Agent Task. The stricter duration and command-intent heuristics apply
+only to implicit activation; for explicit use they are advisory, and the Native
+Agent keeps control of the exact selected argv and timeout under its ordinary
+permission and Scope boundaries.
 Start a new Codex Task after installing or updating the Plugin so its Skill is
 loaded.
 
