@@ -84,6 +84,10 @@ jobs:
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: go mod verify
 
+      - name: Validate acceptance report syntax
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: go run ./internal/releasegate/cmd/validate-report --reports-dir release/acceptance --syntax-only
+
       - name: Run unit and integration tests
         run: go test ./...
 

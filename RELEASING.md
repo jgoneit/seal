@@ -31,14 +31,18 @@ all five jobs succeed. The publish job rejects missing or additional archives,
 creates a bytewise filename-sorted `checksums.txt`, and creates the GitHub
 Release with those six files. Tags containing `-rc.` create prereleases.
 Every Release is initially published as a non-Latest prerelease. The workflow
-then invokes the checked-in installer against the published tag from isolated
-user-local and temporary directories on all five native runners. It requires
-the exact installed version and no download, extraction, staging, or backup
-residue. An RC remains a non-Latest prerelease. A stable Release becomes
-non-prerelease and Latest only after both public installers pass. A failed
-post-publication smoke leaves the immutable tag and prerelease in place for
-investigation; repair uses a new RC or patch version rather than replacing its
-assets.
+validates RC tags without requiring an acceptance report. Before a stable
+Release is published, it requires a complete report for the highest same-base
+RC, requires that RC to be an ancestor of the stable tag, and confirms that its
+normalized Acceptance surface matches the stable tag.
+It then invokes the checked-in installer against the published tag from
+isolated user-local and temporary directories on all five native runners. It
+requires the exact installed version and no download, extraction, staging, or
+backup residue. An RC remains a non-Latest prerelease. A stable Release becomes
+non-prerelease and Latest only after the report gate and both public installers
+pass. A failed post-publication smoke leaves the immutable tag and prerelease
+in place for investigation; repair uses a new RC or patch version rather than
+replacing its assets.
 
 The workflow grants `contents: write` only to the publish and stable-promotion
 jobs. All third-party workflow actions are official GitHub actions pinned to
@@ -69,11 +73,14 @@ full commit SHAs. Seal does not publish signatures or attestations in v1.
    the tag object and version before publishing.
 5. Install the published archives through both installers on clean supported
    hosts and confirm the displayed absolute path and version.
-6. Accumulate 20 real user Tasks in the RC acceptance report before preparing
-   the final version. The report must record zero false acceptances, zero
-   Evidence-corruption bypasses, zero source-binding bypasses, and zero
-   repeated false source mismatches. Synthetic fixtures do not replace that
-   product gate.
+6. Accumulate at least 20 consecutive real-user Tasks in the RC acceptance
+   report before preparing the final version. The report must record zero false
+   acceptances, Evidence-corruption bypasses, source-binding bypasses, change
+   attribution errors, and Plugin routing errors. One isolated false source
+   mismatch may be recorded; a second blocks stable release. Synthetic fixtures
+   do not replace that product gate. Follow
+   [`release/acceptance/README.md`](release/acceptance/README.md); any
+   Acceptance-surface change requires a new RC and a fresh report.
 7. For the final release, update the checked-in version to the final value in a
    new release-preparation commit and annotate exactly that commit. Do not turn
    an RC tag or its assets into the final release.

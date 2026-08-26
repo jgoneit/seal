@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jgoneit/seal/release/acceptance/report-v1.schema.json",
+  "title": "Seal RC Acceptance Report v1",
+  "description": "Release-internal metadata and a non-public contract. This is not a Seal Task, Evidence, or Completion schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate",
+    "window",
+    "privacy",
+    "attestations",
+    "tasks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "candidate": {
+      "$ref": "#/$defs/candidate"
+    },
+    "window": {
+      "$ref": "#/$defs/window"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "attestations": {
+      "$ref": "#/$defs/attestations"
+    },
+    "tasks": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rc_tag",
+        "rc_commit",
+        "target_stable_tag"
+      ],
+      "properties": {
+        "rc_tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+-rc\\.[1-9][0-9]*$"
+        },
+        "rc_commit": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "target_stable_tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started_at",
+        "ended_at"
+      ],
+      "properties": {
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "ended_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anonymous",
+        "contains_raw_logs",
+        "contains_source_content",
+        "contains_repository_identifiers",
+        "contains_user_identifiers"
+      ],
+      "properties": {
+        "anonymous": {
+          "const": true
+        },
+        "contains_raw_logs": {
+          "const": false
+        },
+        "contains_source_content": {
+          "const": false
+        },
+        "contains_repository_identifiers": {
+          "const": false
+        },
+        "contains_user_identifiers": {
+          "const": false
+        }
+      }
+    },
+    "attestations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all_eligible_tasks_recorded_consecutively",
+        "all_entries_are_real_user_work",
+        "exact_candidate_used",
+        "critical_fix_resets_the_window"
+      ],
+      "properties": {
+        "all_eligible_tasks_recorded_consecutively": {
+          "const": true
+        },
+        "all_entries_are_real_user_work": {
+          "const": true
+        },
+        "exact_candidate_used": {
+          "const": true
+        },
+        "critical_fix_resets_the_window": {
+          "const": true
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordinal",
+        "observed_at",
+        "interface",
+        "platform",
+        "initial_worktree",
+        "task_created_before_implementation",
+        "exact_task_run_binding_preserved",
+        "evidence_result",
+        "mechanical_result",
+        "completion_result",
+        "check_count",
+        "optional_check_count",
+        "checks_duration_ms",
+        "seal_tool_call_count",
+        "seal_duration_ms",
+        "result_understood_without_followup",
+        "false_acceptance",
+        "evidence_corruption_bypass",
+        "source_binding_bypass",
+        "false_source_mismatch",
+        "wrong_change_attribution",
+        "wrong_plugin_routing"
+      ],
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "observed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "interface": {
+          "enum": [
+            "core-cli",
+            "plugin-explicit",
+            "plugin-implicit"
+          ]
+        },
+        "platform": {
+          "enum": [
+            "linux-amd64",
+            "linux-arm64",
+            "darwin-amd64",
+            "darwin-arm64",
+            "windows-amd64"
+          ]
+        },
+        "initial_worktree": {
+          "enum": [
+            "clean",
+            "dirty"
+          ]
+        },
+        "task_created_before_implementation": {
+          "type": "boolean"
+        },
+        "exact_task_run_binding_preserved": {
+          "type": "boolean"
+        },
+        "evidence_result": {
+          "enum": [
+            "recorded",
+            "not-recorded",
+            "indeterminate"
+          ]
+        },
+        "mechanical_result": {
+          "enum": [
+            "pass",
+            "fail",
+            "unavailable",
+            "indeterminate"
+          ]
+        },
+        "completion_result": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "failed",
+            "not-attempted",
+            "indeterminate"
+          ]
+        },
+        "check_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "optional_check_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "checks_duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "seal_tool_call_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "seal_duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "result_understood_without_followup": {
+          "type": "boolean"
+        },
+        "false_acceptance": {
+          "type": "boolean"
+        },
+        "evidence_corruption_bypass": {
+          "type": "boolean"
+        },
+        "source_binding_bypass": {
+          "type": "boolean"
+        },
+        "false_source_mismatch": {
+          "type": "boolean"
+        },
+        "wrong_change_attribution": {
+          "type": "boolean"
+        },
+        "wrong_plugin_routing": {
+          "type": "boolean"
+        }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}
