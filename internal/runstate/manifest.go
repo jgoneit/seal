@@ -16,10 +16,6 @@ type manifestRecord struct {
 	document  map[string]any
 }
 
-func validateManifest(runDirectory, taskID, runID string, expectedFiles []string) (string, error) {
-	return validateManifestContext(context.Background(), runDirectory, taskID, runID, expectedFiles)
-}
-
 func validateManifestContext(ctx context.Context, runDirectory, taskID, runID string, expectedFiles []string) (string, error) {
 	contents, err := readArtifactContext(ctx, runDirectory, "run-manifest.json")
 	if err != nil {
@@ -121,10 +117,6 @@ func validateManifestContext(ctx context.Context, runDirectory, taskID, runID st
 		return "", &EvidenceError{message: "run-manifest.json evidence_sha256 does not match its file records."}
 	}
 	return computed, nil
-}
-
-func validateManifestRecords(raw []any, expectedFiles []string) ([]manifestRecord, error) {
-	return validateManifestRecordsContext(context.Background(), raw, expectedFiles)
 }
 
 func validateManifestRecordsContext(ctx context.Context, raw []any, expectedFiles []string) ([]manifestRecord, error) {

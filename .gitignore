@@ -1,0 +1,3 @@
+# Local Seal runtime state. Keep .seal/checks.json trackable.
+.seal/tasks/
+.seal/evidence/

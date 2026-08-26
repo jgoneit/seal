@@ -17,6 +17,10 @@ The architecture keeps execution outside Seal:
 - The user, Native Agent, or CI owns composition between independent tools.
 - Seal exposes state, not transitions.
 - Seal never invokes another Toolkit module or chooses what runs next.
+- Seal does not own reviewer selection, Knowledge or Security policy,
+  deployment, CI orchestration, or a common Toolkit runtime.
+- Seal does not impose a model reasoning format, SubAgent count, or Agent Team
+  topology.
 
 ## Migration status
 
@@ -50,7 +54,7 @@ seal run show <TASK_ID> --run-id <RUN_ID>
 seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
-The checked-in version is `0.3.0-rc.3`.
+The checked-in version is `0.3.0-rc.4`.
 
 `task create` validates and normalizes a Task Spec, resolves catalog check
 references, records the repository's current full HEAD as its baseline, and
@@ -82,6 +86,11 @@ Seal does not implement Bundle, Verdict, or Reviewer behavior. It does not
 infer a latest identity, retry, repair, rerun checks during Completion, or
 invoke another Toolkit module, and it has no `.harness` fallback.
 
+The Run Manifest is a local integrity boundary, not a signature or remote
+attestation. Checks inherit the caller environment, raw logs and diffs may
+contain secrets, and Completion binds source only at its S2 observation. See
+[TRUST_MODEL.md](TRUST_MODEL.md) for the complete trust and retention boundary.
+
 ## Codex Plugin
 
 This checkout is also a skills-only local Codex Plugin. The Plugin makes the
@@ -89,13 +98,16 @@ documented CLI available to Native Agents; it does not bundle the `seal` binary
 or add another Acceptance authority. After the Plugin and CLI are installed,
 `@Seal` selects it explicitly. Its single Skill may also be selected for a
 concrete implementation request when the target repository already opts in
-with `.seal/checks.json`. Planning, explanation, read-only review, and
-unconfigured repositories do not activate Seal implicitly.
+with `.seal/checks.json` and has a clean worktree before implementation.
+Planning, explanation, read-only review, dirty worktrees, and unconfigured
+repositories do not activate Seal implicitly.
 
 The Native Agent still performs the work normally. The Skill creates the Task
-before implementation, carries exact Task and Run identities, and reports
-`verify`, `run show`, and Basic `complete` as distinct results. It does not add
-approval stages, retry or repair loops, Reviewer behavior, or workflow state.
+before implementation and carries exact Task and Run identities. A
+required-only happy path runs `verify` then Basic `complete`; `run show` remains
+available for optional-check transparency, exact stored-Run queries, and
+selected Completion diagnostics. It does not add approval stages, retry or
+repair loops, Reviewer behavior, or workflow state.
 Malformed or unresolved selected checks and Core-unsupported timeouts block
 every new Agent Task. The stricter duration and command-intent heuristics apply
 only to implicit activation; for explicit use they are advisory, and the Native
@@ -104,17 +116,16 @@ permission and Scope boundaries.
 Start a new Codex Task after installing or updating the Plugin so its Skill is
 loaded.
 
-To exercise the candidate from a Go checkout:
+Opted-in repositories should track `.seal/checks.json` and ignore local runtime
+state:
 
-```bash
-go run ./cmd/seal --help
-go run ./cmd/seal --version
-go run ./cmd/seal task create --file <TASK_JSON> [--force]
-go run ./cmd/seal task show <TASK_ID>
-go run ./cmd/seal verify <TASK_ID>
-go run ./cmd/seal run show <TASK_ID> --run-id <RUN_ID>
-go run ./cmd/seal complete <TASK_ID> --run-id <RUN_ID>
+```gitignore
+.seal/tasks/
+.seal/evidence/
 ```
+
+Deleting either runtime directory also removes the ability to perform future
+exact lookup, Evidence validation, or Completion from the deleted state.
 
 ## Distribution
 
@@ -138,7 +149,7 @@ For a published Linux or macOS release, download the installer from the same
 tag and pass that exact tag explicitly:
 
 ```bash
-tag=v0.3.0-rc.3
+tag=v0.3.0-rc.4
 installer="$(mktemp "${TMPDIR:-/tmp}/seal-install.XXXXXX")"
 trap 'rm -f -- "${installer}"' EXIT
 curl -fsSL "https://raw.githubusercontent.com/jgoneit/seal/${tag}/install.sh" \
@@ -155,7 +166,7 @@ is not on `PATH`.
 For a published Windows amd64 release, use Windows PowerShell:
 
 ```powershell
-$Tag = "v0.3.0-rc.3"
+$Tag = "v0.3.0-rc.4"
 $Installer = Join-Path ([IO.Path]::GetTempPath()) ("seal-install-" + [Guid]::NewGuid().ToString("N") + ".ps1")
 try {
     Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/jgoneit/seal/$Tag/install.ps1" -OutFile $Installer
@@ -197,10 +208,3 @@ repair, latest-Run inference, reviewer execution, or workflow orchestration.
 
 See [MIGRATION_CHARTER.md](MIGRATION_CHARTER.md) for the migration invariants and
 [REFERENCE.md](REFERENCE.md) for the frozen reference identity.
-
-## Not part of Seal
-
-Seal does not own agent execution, planning, reviewer selection, knowledge
-authoring, security enforcement, deployment, CI orchestration, or a common
-Toolkit runtime. It does not impose a model reasoning format, SubAgent count,
-or Agent Team topology.

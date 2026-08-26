@@ -411,8 +411,8 @@ func TestArtifactFilesystemPathUsesPythonSurrogateEscape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readArtifact(runDirectory, unsupported["path"].(string)); err == nil {
-		t.Fatal("readArtifact() accepted unsupported lone surrogate")
+	if _, err := readArtifactContext(context.Background(), runDirectory, unsupported["path"].(string)); err == nil {
+		t.Fatal("readArtifactContext() accepted unsupported lone surrogate")
 	}
 	checksDirectory := filepath.Join(runDirectory, "checks")
 	if err := os.Mkdir(checksDirectory, 0o755); err != nil {
@@ -423,12 +423,12 @@ func TestArtifactFilesystemPathUsesPythonSurrogateEscape(t *testing.T) {
 		t.Logf("filesystem does not support raw-byte fixture: %v", err)
 		return
 	}
-	contents, err := readArtifact(runDirectory, logical)
+	contents, err := readArtifactContext(context.Background(), runDirectory, logical)
 	if err != nil {
-		t.Fatalf("readArtifact() error = %v", err)
+		t.Fatalf("readArtifactContext() error = %v", err)
 	}
 	if string(contents) != "raw-byte\n" {
-		t.Fatalf("readArtifact() = %q", contents)
+		t.Fatalf("readArtifactContext() = %q", contents)
 	}
 }
 

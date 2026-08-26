@@ -145,10 +145,6 @@ func parseTaskFacts(task jsonObject, taskID, context string) (taskFacts, error) 
 	}, nil
 }
 
-func validateDocuments(runDirectory string, task jsonObject, taskID, runID string) (validatedDocuments, error) {
-	return validateDocumentsContext(context.Background(), runDirectory, task, taskID, runID)
-}
-
 func validateDocumentsContext(ctx context.Context, runDirectory string, task jsonObject, taskID, runID string) (validatedDocuments, error) {
 	if err := artifactContextError(ctx); err != nil {
 		return validatedDocuments{}, err
@@ -249,10 +245,6 @@ func validateDocumentsContext(ctx context.Context, runDirectory string, task jso
 		sourceStableDuringChecks: sourceStable,
 		mechanicalResult:         mechanicalResult,
 	}, nil
-}
-
-func readEvidenceJSON(runDirectory, relativePath string) (jsonObject, error) {
-	return readEvidenceJSONContext(context.Background(), runDirectory, relativePath)
 }
 
 func readEvidenceJSONContext(ctx context.Context, runDirectory, relativePath string) (jsonObject, error) {

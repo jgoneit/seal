@@ -32,10 +32,6 @@ func safeRunPath(value any, context string) (string, error) {
 	return strings.Join(parts, "/"), nil
 }
 
-func readArtifact(runDirectory, relativePath string) ([]byte, error) {
-	return readArtifactContext(context.Background(), runDirectory, relativePath)
-}
-
 func readArtifactContext(ctx context.Context, runDirectory, relativePath string) ([]byte, error) {
 	if err := artifactContextError(ctx); err != nil {
 		return nil, err
@@ -122,10 +118,6 @@ func surrogateEscapeFilesystemPath(logical string) (string, error) {
 		index++
 	}
 	return output.String(), nil
-}
-
-func readRequiredArtifact(runDirectory, relativePath string) ([]byte, error) {
-	return readRequiredArtifactContext(context.Background(), runDirectory, relativePath)
 }
 
 func readRequiredArtifactContext(ctx context.Context, runDirectory, relativePath string) ([]byte, error) {

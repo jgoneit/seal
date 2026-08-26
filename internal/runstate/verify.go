@@ -22,7 +22,6 @@ const (
 
 // VerificationRun identifies one completely published Evidence Run.
 type VerificationRun struct {
-	TaskID       string
 	RunID        string
 	EvidencePath string
 }
@@ -92,16 +91,6 @@ func prepareVerification(cwd, taskID string) (preparedVerification, error) {
 		taskDefinition: taskDefinition,
 		checks:         checks,
 	}, nil
-}
-
-func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (*VerificationRun, error) {
-	prepared, err := prepareVerification(cwd, taskID)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), verificationWallClockBudget)
-	defer cancel()
-	return verifyPreparedContext(ctx, prepared, hooks)
 }
 
 // verifyPreparedContext starts at the Basic Profile admission boundary. The
@@ -280,7 +269,6 @@ func verifyPreparedContext(
 	}
 	committed = true
 	return &VerificationRun{
-		TaskID:       taskID,
 		RunID:        writer.runID,
 		EvidencePath: filepath.Join(repository, ".seal", "evidence", taskID, writer.runID),
 	}, nil

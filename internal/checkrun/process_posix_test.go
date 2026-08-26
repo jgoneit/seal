@@ -25,7 +25,7 @@ func TestTimeoutTerminatesProcessTree(t *testing.T) {
 	t.Setenv("SEAL_CHECKRUN_POSIX_HELPER", "1")
 
 	started := time.Now()
-	results, err := RunRooted([]Definition{{
+	results, err := RunRootedContext(context.Background(), []Definition{{
 		Name:           "timeout tree",
 		Argv:           posixHelperArgv("tree-parent-block", childPIDPath),
 		Required:       true,
@@ -51,7 +51,7 @@ func TestSuccessfulParentCleansBackgroundDescendant(t *testing.T) {
 	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("SEAL_CHECKRUN_POSIX_HELPER", "1")
 
-	results, err := RunRooted([]Definition{{
+	results, err := RunRootedContext(context.Background(), []Definition{{
 		Name:     "background child",
 		Argv:     posixHelperArgv("tree-parent-exit", childPIDPath),
 		Required: true,
@@ -91,7 +91,7 @@ func TestOutputLimitTerminatesProcessTree(t *testing.T) {
 	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
 	t.Setenv("SEAL_CHECKRUN_POSIX_HELPER", "1")
 
-	_, err := RunRooted([]Definition{{
+	_, err := RunRootedContext(context.Background(), []Definition{{
 		Name:           "output tree",
 		Argv:           posixHelperArgv("tree-parent-output", childPIDPath),
 		Required:       true,

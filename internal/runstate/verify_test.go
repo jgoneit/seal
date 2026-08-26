@@ -18,6 +18,16 @@ import (
 	"time"
 )
 
+func verifyWithHooks(cwd, taskID string, hooks verifyHooks) (*VerificationRun, error) {
+	prepared, err := prepareVerification(cwd, taskID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), verificationWallClockBudget)
+	defer cancel()
+	return verifyPreparedContext(ctx, prepared, hooks)
+}
+
 func TestVerifyPublishesManifestValidRunForPassingAndFailedChecks(t *testing.T) {
 	tests := []struct {
 		name             string

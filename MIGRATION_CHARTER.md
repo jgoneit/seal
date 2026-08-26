@@ -105,96 +105,37 @@ handle-relative publication and has no pathname fallback.
 
 ## Approved Go v1 Verify execution boundary
 
-Go v1 bounds the resources directly controlled by Verify as an explicitly
-approved invocation-environment and resource-limit divergence from the frozen
-runner. The default and maximum effective check timeout are both 300 seconds.
-A saved positive timeout at or below that maximum remains exact; a larger saved
-effective timeout is rejected before S0 or Evidence staging with exit `2`,
-rather than being clamped or converted into a timed-out check.
+Go v1 bounds the resources and process trees directly controlled by Verify as
+an approved invocation-environment divergence. Admission rejects unsupported
+timeouts before S0; check execution, output, process cleanup, source
+observation, and pre-publication work are bounded without truncating or
+reinterpreting a published Run. The caller environment remains inherited and
+these bounds add no CPU, memory, network, environment, or Source-write sandbox.
 
-One cumulative 600-second deadline begins immediately after the saved Task and
-all saved check definitions pass admission validation, before S0, and covers
-all source observation, check execution, change collection, artifact
-construction, and other pre-publication work. Check stdin is the platform null
-device while the caller environment remains inherited. Each raw stdout or
-stderr stream is limited to 8,388,608 bytes, and all check log streams in one
-Verify are limited to 33,554,432 bytes in aggregate. An exact-limit stream or
-aggregate remains valid. The first excess byte or cumulative deadline expiry
-terminates any current managed check tree, aborts the private staging Run,
-returns exit `3`, and publishes no Run. Logs are not silently truncated and no
-truncation marker or alternate Evidence schema is introduced.
-
-After process-tree cleanup, output collectors have a bounded one-second drain
-period. A descendant that deliberately escapes the managed group or Job and
-keeps a pipe open causes the unpublished Run to abort; it cannot hold Verify
-indefinitely or turn a forced partial log into successful Evidence.
-
-The cumulative deadline is propagated through Git subprocesses and checked
-cooperatively during source walking, Evidence self-validation reads, and
-hashing. It cannot preempt an individual filesystem syscall blocked inside the
-operating system. Once native Evidence publication begins, its commit result
-takes precedence over a concurrently expiring deadline; the command does not
-report an unpublished failure for a Run that became visible.
-
-Git processes receive platform tree ownership: a private POSIX session or a
-non-breakaway Windows Job established before user code resumes. A deliberately
-new POSIX session can escape portable process-group termination, so Git's pipe
-wait is also bounded to one second. That escape cannot hold Verify open, but the
-escaped process itself is outside Seal's portable ownership guarantee.
-
-These bounds change whether an unsafe invocation can start or publish, but do
-not reinterpret a published Task, check outcome, Source identity, Scope result,
-Evidence document, manifest, or Completion decision. They add no CPU or memory
-quota, network restriction, environment allowlist, Source-write sandbox,
-Reviewer, or Verdict behavior. The complete execution and failure contract is
-recorded in [`conformance/verify-contract.md`](conformance/verify-contract.md).
+The exact limits, commit boundary, process ownership, exit classification, and
+failure ordering are owned by
+[`conformance/verify-contract.md`](conformance/verify-contract.md). They do not
+change Task, check, Scope, Source, Evidence, Manifest, or Completion meaning.
 
 ## Approved Go v1 Completion transition
 
-Go v1 Completion is an explicitly approved canonical policy transition, not an
-exact reproduction of the frozen Python Completion policy. The frozen
-implementation remains authoritative for Task, Evidence, manifest, S0/S1,
-Scope, and check meanings consumed through `ValidateRun()`. It is no longer
-authoritative for whether a recorded Verdict can satisfy Completion or for the
-shape and mutability of a newly written Completion record.
+Go v1 Completion is an approved canonical policy transition, not an exact copy
+of frozen Python Completion. Python remains authoritative for the Task,
+Evidence, Manifest, S0/S1, Scope, and check meanings consumed by
+`ValidateRun()`.
 
-The only supported Go v1 Completion profile is Basic Acceptance with
-`verifier.required=false`. A Task with `verifier.required=true` remains valid
-for storage, verification, and read-only queries, but `complete` always rejects
-it with exit `7`. Go v1 does not read, validate, or decide from
-`verdict.raw.json` or `verdict.json`; their presence, absence, validity, and
-contents do not affect Completion.
+The supported profile is Basic Acceptance with `verifier.required=false`.
+Required-verifier Tasks remain valid for storage, verification, and exact
+read-only queries but `complete` rejects them with exit `7`. Verdict artifacts
+are never Completion inputs. New records are immutable schema-version-2
+records; legacy v1 records are neither upgraded nor overwritten, and reuse
+requires full current eligibility revalidation.
 
-Go v1 writes only immutable schema-version-2 Completion records. It never
-upgrades or overwrites the frozen schema-version-1 record. A valid existing v2
-record is reusable only after the current invocation revalidates the Run,
-collects current source, and reapplies every eligibility gate. Reuse preserves
-the record's exact bytes and original timestamp. Static reuse validation
-requires both stored source digests to equal the `ValidateRun()`-authoritative
-S1 digest before S2 is collected. A legacy v1 record, a corrupt or
-contradictory v2 record, or a symlink, directory, or other non-regular
-Completion destination is Evidence failure exit `8` and remains untouched.
-Absent records are published atomically without replacement; concurrent
-eligible creators reconcile an existing winner only by validating and reusing
-its exact bytes and timestamp.
-
-The fixed source and policy order is: CLI and identity; canonical stored-Run
-validation; existing v2 record validation; stable current-source S2
-collection; `S0 == S1 == S2`; the unsupported required-verifier gate; Scope;
-required timeout; other required-check failure; and only then immutable record
-publication or reuse. This order preserves exits `3`, `9`, `7`, `4`, `6`, and
-`5` respectively after stored Evidence and existing-record failures have taken
-their earlier classifications. Optional check failure or timeout does not block
-Basic Acceptance. A runtime, result-rendering, or stdout failure is exit `1`;
-if it occurs after a record was committed or selected for reuse, the immutable
-record is preserved and is not rolled back.
-
-This transition does not add Bundle, Verdict, Reviewer, retry, repair, latest
-identity, or automatic execution behavior. The complete external contract,
-record schema, idempotency rule, and failure precedence are frozen in
-[`conformance/complete-contract.md`](conformance/complete-contract.md). The
-policy was approved before implementation and is now represented by the public
-command and its conformance tests.
+The exact source and gate order, record schema, atomic publication,
+idempotency, and failure precedence are owned by
+[`conformance/complete-contract.md`](conformance/complete-contract.md). This
+transition adds no Bundle, Reviewer, retry, repair, latest identity, or
+automatic execution behavior.
 
 ## Explicit exclusions
 

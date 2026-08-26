@@ -27,7 +27,7 @@ func TestTimeoutTerminatesProcessTree(t *testing.T) {
 
 	runDone := make(chan windowsTreeRunResult, 1)
 	go func() {
-		results, err := RunRooted([]Definition{{
+		results, err := RunRootedContext(context.Background(), []Definition{{
 			Name:           "timeout tree",
 			Argv:           windowsTreeHelperArgv("tree-parent-block", childPIDPath),
 			Required:       true,
@@ -66,7 +66,7 @@ func TestSuccessfulParentCleansBackgroundDescendant(t *testing.T) {
 
 	runDone := make(chan windowsTreeRunResult, 1)
 	go func() {
-		results, err := RunRooted([]Definition{{
+		results, err := RunRootedContext(context.Background(), []Definition{{
 			Name:           "background child",
 			Argv:           windowsTreeHelperArgv("tree-parent-exit", childPIDPath, releasePath),
 			Required:       true,
@@ -130,7 +130,7 @@ func TestOutputLimitTerminatesWindowsProcessTree(t *testing.T) {
 
 	runDone := make(chan windowsTreeRunResult, 1)
 	go func() {
-		results, err := RunRooted([]Definition{{
+		results, err := RunRootedContext(context.Background(), []Definition{{
 			Name:           "output tree",
 			Argv:           windowsTreeHelperArgv("tree-parent-output", childPIDPath),
 			Required:       true,
@@ -166,7 +166,7 @@ func TestRunDoesNotInheritUnlistedHandle(t *testing.T) {
 	}
 	evidenceRoot := openTestRoot(t, evidence)
 
-	results, err := RunRooted([]Definition{{
+	results, err := RunRootedContext(context.Background(), []Definition{{
 		Name:     "handle probe",
 		Argv:     windowsHelperArgv("signal-event", strconv.FormatUint(uint64(sentinel), 10)),
 		Required: true,

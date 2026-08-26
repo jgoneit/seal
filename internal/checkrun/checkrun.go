@@ -41,7 +41,7 @@ const (
 )
 
 // Definition is one already-resolved saved Task check. TimeoutSeconds is nil
-// when the reference default applies. RunRooted clones all mutable fields before use.
+// when the reference default applies. RunRootedContext clones all mutable fields before use.
 type Definition struct {
 	Name           string
 	Argv           []string
@@ -94,17 +94,12 @@ type ResourceLimitError struct {
 func (e *ResourceLimitError) Error() string { return e.message }
 func (e *ResourceLimitError) Unwrap() error { return e.cause }
 
-// RunRooted executes checks while creating every log relative to an already
-// opened Evidence root. The caller retains ownership of evidenceRoot. This is
-// the publication-safe entry point: it never reconstructs a mutable absolute
-// path for logs.
-func RunRooted(checks []Definition, repositoryRoot string, evidenceRoot *os.Root) ([]Result, error) {
-	return RunRootedContext(context.Background(), checks, repositoryRoot, evidenceRoot)
-}
-
-// RunRootedContext is RunRooted with a caller-owned wall-clock boundary. A
-// canceled or expired context terminates the current process tree and returns a
-// ResourceLimitError. All definitions are validated before any check starts.
+// RunRootedContext executes checks with a caller-owned wall-clock boundary while
+// creating every log relative to an already opened Evidence root. The caller
+// retains ownership of evidenceRoot. It never reconstructs a mutable absolute
+// path for logs. A canceled or expired context terminates the current process
+// tree and returns a ResourceLimitError. All definitions are validated before
+// any check starts.
 func RunRootedContext(
 	ctx context.Context,
 	checks []Definition,
