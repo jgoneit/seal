@@ -59,28 +59,35 @@ catalog blocks Task creation but not an exact `task show` or `run show` query.
 Inspect only the checks selected for this Task. Resolve every selected catalog
 name to its definition; count optional checks and duplicate selections because
 Core executes them all. The effective timeout is the declared positive integer
-or Core's 300-second default when it is absent. A selected effective timeout
-above Core's 300-second execution maximum is unsafe for every Agent-facing Task.
-For implicit use, further require every effective timeout to be at most 120
-seconds and their exact sum to be at most 300 seconds. A malformed or unresolved
-selected definition is unsafe.
+or Core's 300-second default when it is absent. A malformed or unresolved
+selected definition, or an effective timeout above Core's 300-second execution
+maximum, blocks both implicit and explicit Task creation.
+Report the exact hard-block condition. Skip implicit Seal and continue the
+Native Agent work; for explicit use, stop before creating an unusable Task.
 
-Checks used through the Agent-facing workflow must be noninteractive and must
-not intentionally change tracked or nonignored product Source. Ignored cache,
-build, and temporary output is allowed. Treat an argv as unsafe when it clearly
-starts an interactive, watch, server, REPL, or pager process; asks a shell or
-evaluator to interpret a command string; or performs a formatter write/fix,
-code generation, snapshot update, migration, dependency update, or
-configuration update. Do not extend these examples into guesses about an
-otherwise ordinary check; rely on Core's execution bounds when no unsafe intent
-is clear.
+For implicit use, further require every effective timeout to be at most 120
+seconds and their exact sum to be at most 300 seconds. Implicitly selected
+checks must be noninteractive and must not intentionally change tracked or
+nonignored product Source. Ignored cache, build, and temporary output is
+allowed. Treat an implicit argv as unsafe when it clearly starts an interactive,
+watch, server, REPL, or pager process; asks a shell or evaluator to interpret a
+command string; or performs a formatter write/fix, code generation, snapshot
+update, migration, dependency update, or configuration update. Do not extend
+these examples into guesses about an otherwise ordinary check; rely on Core's
+execution bounds when no unsafe intent is clear.
 
 Never rewrite a catalog definition, argv, or timeout to make it pass. For an
 unsafe implicit candidate, give a one-line reason that Seal was skipped and
-continue the requested Native Agent work without asking. For explicit use,
-stop before Task creation, report the exact unsafe or unresolved condition, and
-wait for the user. Seal's S0/S1 comparison detects Source mutation only after a
-check ran; it is not prevention or rollback.
+continue the requested Native Agent work without asking.
+
+For explicit use, the implicit 120-second, 300-second-sum, and command-intent
+heuristics are advisory rather than another approval gate. Briefly identify a
+matching condition, then keep the selected argv and timeout exact and proceed
+when running the check is already within the user's authorized work. Apply the
+Native Agent's normal permission and Scope boundaries: explicit Seal selection
+does not authorize unrelated or otherwise unapproved actions. Seal's S0/S1
+comparison detects Source mutation only after a check ran; it is not prevention
+or rollback.
 
 ## Change workflow
 
