@@ -197,14 +197,9 @@ func ObserveSnapshotContext(ctx context.Context, request SnapshotRequest) (Snaps
 	return SnapshotResult{snapshot: snapshot, snapshotJSON: snapshotJSON}, nil
 }
 
-// ObserveChanges collects layered changed-files state and the raw binary diff
-// after Verify S1. It does not collect a Source Snapshot.
-func ObserveChanges(request Request) (ChangeResult, error) {
-	return ObserveChangesContext(context.Background(), request)
-}
-
-// ObserveChangesContext is ObserveChanges with cooperative cancellation for
-// Git subprocesses and source-change iteration.
+// ObserveChangesContext collects layered changed-files state and the raw binary
+// diff after Verify S1, with cooperative cancellation for Git subprocesses and
+// source-change iteration. It does not collect a Source Snapshot.
 func ObserveChangesContext(ctx context.Context, request Request) (ChangeResult, error) {
 	if err := contextFailure(ctx); err != nil {
 		return ChangeResult{}, err

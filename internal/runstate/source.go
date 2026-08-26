@@ -24,15 +24,6 @@ type sourceEntry struct {
 	sha256    *string
 }
 
-func validateSourceBinding(
-	runDirectory string,
-	taskBaseline string,
-	changedFiles jsonObject,
-	verification jsonObject,
-) (bool, error) {
-	return validateSourceBindingContext(context.Background(), runDirectory, taskBaseline, changedFiles, verification)
-}
-
 func validateSourceBindingContext(
 	ctx context.Context,
 	runDirectory string,
@@ -106,10 +97,6 @@ func validateSourceBindingContext(
 	return computedStable, nil
 }
 
-func readSourceSnapshot(runDirectory, filename string) (sourceSnapshot, error) {
-	return readSourceSnapshotContext(context.Background(), runDirectory, filename)
-}
-
 func readSourceSnapshotContext(ctx context.Context, runDirectory, filename string) (sourceSnapshot, error) {
 	contents, err := readArtifactContext(ctx, runDirectory, filename)
 	if err != nil {
@@ -145,10 +132,6 @@ func readSourceSnapshotContext(ctx context.Context, runDirectory, filename strin
 		return sourceSnapshot{}, &EvidenceError{message: fmt.Sprintf("Source Binding artifact '%s' is invalid: %s", filename, err.Error())}
 	}
 	return parsed, nil
-}
-
-func parseSourceSnapshot(document jsonObject) (sourceSnapshot, error) {
-	return parseSourceSnapshotContext(context.Background(), document)
 }
 
 func parseSourceSnapshotContext(ctx context.Context, document jsonObject) (sourceSnapshot, error) {

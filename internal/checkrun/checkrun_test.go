@@ -56,7 +56,7 @@ func TestRunRecordsReferenceContractAndContinues(t *testing.T) {
 		},
 	}
 
-	results, err := RunRooted(checks, repository, evidenceRoot)
+	results, err := RunRootedContext(context.Background(), checks, repository, evidenceRoot)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -160,13 +160,13 @@ func TestRunRootedKeepsLogsInRetainedEvidenceDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results, err := RunRooted([]Definition{{
+	results, err := RunRootedContext(context.Background(), []Definition{{
 		Name:     "missing",
 		Argv:     []string{filepath.Join(repository, "missing-executable")},
 		Required: true,
 	}}, repository, root)
 	if err != nil {
-		t.Fatalf("RunRooted(): %v", err)
+		t.Fatalf("RunRootedContext(): %v", err)
 	}
 	if len(results) != 1 || results[0].ExitCode != nil || results[0].Passed {
 		t.Fatalf("results = %#v", results)
@@ -200,7 +200,7 @@ func TestRunUsesClosedStdinAndPreservesBoundedRawLogs(t *testing.T) {
 	os.Stdin = stdin
 	defer func() { os.Stdin = previousStdin }()
 
-	results, err := RunRooted([]Definition{
+	results, err := RunRootedContext(context.Background(), []Definition{
 		{Name: "stdin", Argv: helperArgv("copy-stdin"), Required: true},
 		{Name: "large", Argv: helperArgv("large", strconv.Itoa(2*1024*1024)), Required: true},
 	}, repository, evidenceRoot)
@@ -238,7 +238,7 @@ func TestRunAcceptsMaximumTimeout(t *testing.T) {
 	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
 	maximum := big.NewInt(MaxTimeoutSeconds)
 
-	results, err := RunRooted([]Definition{{
+	results, err := RunRootedContext(context.Background(), []Definition{{
 		Name:           "maximum timeout",
 		Argv:           helperArgv("exit", "0"),
 		Required:       true,
@@ -277,7 +277,7 @@ func TestRunRejectsInvalidDefinitions(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			evidenceRoot := openTestRoot(t, privateTempDirectory(t))
-			_, err := RunRooted([]Definition{test.definition}, repository, evidenceRoot)
+			_, err := RunRootedContext(context.Background(), []Definition{test.definition}, repository, evidenceRoot)
 			var definitionError *DefinitionError
 			if !errors.As(err, &definitionError) {
 				t.Fatalf("error type = %T, want DefinitionError (%v)", err, err)
@@ -296,7 +296,7 @@ func TestRunPrevalidatesEveryDefinitionBeforeExecution(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "executed")
 	t.Setenv("SEAL_CHECKRUN_HELPER", "1")
 
-	_, err := RunRooted([]Definition{
+	_, err := RunRootedContext(context.Background(), []Definition{
 		{Name: "would execute", Argv: helperArgv("mark", marker, "ran", "0"), Required: true},
 		{Name: "invalid later definition", Argv: helperArgv("exit", "0"), Required: true, TimeoutSeconds: big.NewInt(MaxTimeoutSeconds + 1)},
 	}, repository, evidenceRoot)
@@ -330,7 +330,7 @@ func TestRunEnforcesPerStreamOutputLimitAtCapPlusOne(t *testing.T) {
 			exactEvidence := privateTempDirectory(t)
 			exactRoot := openTestRoot(t, exactEvidence)
 			exactName := "exact " + stream.name
-			results, err := RunRooted([]Definition{{
+			results, err := RunRootedContext(context.Background(), []Definition{{
 				Name:     exactName,
 				Argv:     helperArgv("stream", stream.name, strconv.FormatInt(MaxStreamOutputBytes, 10)),
 				Required: true,
@@ -346,7 +346,7 @@ func TestRunEnforcesPerStreamOutputLimitAtCapPlusOne(t *testing.T) {
 			overflowEvidence := privateTempDirectory(t)
 			overflowRoot := openTestRoot(t, overflowEvidence)
 			overflowName := "overflow " + stream.name
-			_, err = RunRooted([]Definition{{
+			_, err = RunRootedContext(context.Background(), []Definition{{
 				Name:     overflowName,
 				Argv:     helperArgv("stream", stream.name, strconv.FormatInt(MaxStreamOutputBytes+1, 10)),
 				Required: true,
@@ -368,7 +368,7 @@ func TestRunEnforcesSharedAggregateOutputLimit(t *testing.T) {
 		{Name: "aggregate plus one", Argv: helperArgv("stream", "stdout", "1"), Required: true},
 	}
 
-	_, err := RunRooted(checks, repository, evidenceRoot)
+	_, err := RunRootedContext(context.Background(), checks, repository, evidenceRoot)
 	assertResourceLimit(t, err, AggregateResourceLimitMessage)
 	var total int64
 	for index, check := range checks {
@@ -418,7 +418,7 @@ func TestRunReportsInfrastructureFault(t *testing.T) {
 	}
 	evidenceRoot := openTestRoot(t, evidence)
 
-	_, err := RunRooted([]Definition{{Name: "blocked", Argv: []string{"unused"}}}, repository, evidenceRoot)
+	_, err := RunRootedContext(context.Background(), []Definition{{Name: "blocked", Argv: []string{"unused"}}}, repository, evidenceRoot)
 	var infrastructureError *InfrastructureError
 	if !errors.As(err, &infrastructureError) {
 		t.Fatalf("error type = %T, want InfrastructureError (%v)", err, err)
@@ -443,7 +443,7 @@ func TestConcurrentRunsUseIsolatedLogs(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			results, err := RunRooted([]Definition{{
+			results, err := RunRootedContext(context.Background(), []Definition{{
 				Name:     "concurrent",
 				Argv:     helperArgv("text", strconv.Itoa(index)),
 				Required: true,
