@@ -50,7 +50,7 @@ seal run show <TASK_ID> --run-id <RUN_ID>
 seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
-The checked-in version is `0.3.0-rc.2`.
+The checked-in version is `0.3.0-rc.3`.
 
 `task create` validates and normalizes a Task Spec, resolves catalog check
 references, records the repository's current full HEAD as its baseline, and
@@ -96,6 +96,11 @@ The Native Agent still performs the work normally. The Skill creates the Task
 before implementation, carries exact Task and Run identities, and reports
 `verify`, `run show`, and Basic `complete` as distinct results. It does not add
 approval stages, retry or repair loops, Reviewer behavior, or workflow state.
+Malformed or unresolved selected checks and Core-unsupported timeouts block
+every new Agent Task. The stricter duration and command-intent heuristics apply
+only to implicit activation; for explicit use they are advisory, and the Native
+Agent keeps control of the exact selected argv and timeout under its ordinary
+permission and Scope boundaries.
 Start a new Codex Task after installing or updating the Plugin so its Skill is
 loaded.
 
@@ -133,7 +138,7 @@ For a published Linux or macOS release, download the installer from the same
 tag and pass that exact tag explicitly:
 
 ```bash
-tag=v0.3.0-rc.2
+tag=v0.3.0-rc.3
 installer="$(mktemp "${TMPDIR:-/tmp}/seal-install.XXXXXX")"
 trap 'rm -f -- "${installer}"' EXIT
 curl -fsSL "https://raw.githubusercontent.com/jgoneit/seal/${tag}/install.sh" \
@@ -150,7 +155,7 @@ is not on `PATH`.
 For a published Windows amd64 release, use Windows PowerShell:
 
 ```powershell
-$Tag = "v0.3.0-rc.2"
+$Tag = "v0.3.0-rc.3"
 $Installer = Join-Path ([IO.Path]::GetTempPath()) ("seal-install-" + [Guid]::NewGuid().ToString("N") + ".ps1")
 try {
     Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/jgoneit/seal/$Tag/install.ps1" -OutFile $Installer
