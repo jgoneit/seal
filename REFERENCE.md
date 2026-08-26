@@ -24,8 +24,9 @@ Seal Legacy retains the historical releases and tags:
 - `v0.2.0`
 - `v0.2.1`
 
-They are historical artifacts. This Go bootstrap creates no tag or release and
-does not move or reinterpret an existing one.
+Those are historical Seal Legacy artifacts. The initial Go bootstrap did not
+move or reinterpret them. Go successor releases use separate tags and do not
+alter the frozen reference identity above.
 
 ## Contract meaning to reproduce
 
