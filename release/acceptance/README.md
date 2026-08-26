@@ -12,7 +12,7 @@ invariants.
 ## Recording rules
 
 - Name a report exactly `<RC_TAG>.json`, for example
-  `v0.3.0-rc.4.json`.
+  `v0.3.0-rc.5.json`.
 - Begin the observation window strictly after the exact annotated RC tag time.
   Record every consecutive eligible real-user Task in that window, including
   failures and unavailable or indeterminate attempts. Do not select only
