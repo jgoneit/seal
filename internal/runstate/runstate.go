@@ -90,6 +90,8 @@ type ValidatedRun struct {
 	requiredChecksPass       bool
 	sourceStableDuringChecks bool
 	checks                   []Check
+	checkDurations           []any
+	timestamp                string
 }
 
 // Summary is the public read-only validated-run-summary/v1 projection.
@@ -310,6 +312,8 @@ func validateRunAtContext(
 		requiredChecksPass:       documents.requiredChecksPass,
 		sourceStableDuringChecks: documents.sourceStableDuringChecks,
 		checks:                   documents.checkSummaries,
+		checkDurations:           documents.checkDurations,
+		timestamp:                documents.timestamp,
 	}, nil
 }
 

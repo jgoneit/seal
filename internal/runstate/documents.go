@@ -21,6 +21,8 @@ var requiredEvidenceFiles = []string{
 type validatedDocuments struct {
 	expectedFiles            []string
 	checkSummaries           []Check
+	checkDurations           []any
+	timestamp                string
 	scopeViolations          []ScopeViolation
 	baseline                 string
 	verifierRequired         bool
@@ -232,9 +234,15 @@ func validateDocumentsContext(ctx context.Context, runDirectory string, task jso
 	if err := validateExactEvidenceList(verification.files, expectedFiles); err != nil {
 		return validatedDocuments{}, err
 	}
+	durations := make([]any, len(checkSummaries))
+	for index, value := range checksDocument["checks"].([]any) {
+		durations[index] = value.(map[string]any)["duration_seconds"]
+	}
 	return validatedDocuments{
 		expectedFiles:            expectedFiles,
 		checkSummaries:           checkSummaries,
+		checkDurations:           durations,
+		timestamp:                verification.document["timestamp"].(string),
 		scopeViolations:          changed.projected,
 		baseline:                 taskDefinition.baseline,
 		verifierRequired:         taskDefinition.verifierRequired,
