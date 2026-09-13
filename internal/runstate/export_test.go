@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jgoneit/seal/internal/taskstate"
 )
 
 func TestExportRunsEmptyRepositoryDoesNotCreateState(t *testing.T) {
@@ -277,22 +279,66 @@ func TestExportLegacyNonFiniteMetricsBecomeNull(t *testing.T) {
 }
 
 func TestExportDirectoryLimitReportsIncomplete(t *testing.T) {
+	for _, test := range []struct{ directory, entryFormat string }{
+		{"evidence", "TASK-%05d"},
+		{"tasks", ".task.tmp-%032x"},
+	} {
+		t.Run(test.directory, func(t *testing.T) {
+			repository := t.TempDir()
+			if err := os.Mkdir(filepath.Join(repository, ".git"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			directory := filepath.Join(repository, ".seal", test.directory)
+			if err := os.MkdirAll(directory, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			for index := 0; index <= exportEntryLimit; index++ {
+				if err := os.WriteFile(filepath.Join(directory, fmt.Sprintf(test.entryFormat, index)), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			report, err := ExportRuns(repository, "test")
+			if err != nil || report.ScanComplete || len(report.Tasks) != 0 || len(report.Runs) != 0 || !hasExportIssue(report, "scan_limit") {
+				t.Fatalf("limit = %#v, %v", report, err)
+			}
+		})
+	}
+}
+
+func TestExportTaskInventoryIgnoresPublishedTemporaryLink(t *testing.T) {
 	repository := t.TempDir()
-	if err := os.Mkdir(filepath.Join(repository, ".git"), 0o700); err != nil {
+	verificationGit(t, repository, "init", "--quiet")
+	verificationGit(t, repository, "-c", "user.name=Seal Export Test", "-c", "user.email=seal-export@example.invalid",
+		"commit", "--quiet", "--allow-empty", "-m", "baseline")
+	writeTestJSON(t, filepath.Join(repository, ".seal", "checks.json"), map[string]any{
+		"schema_version": 1,
+		"checks":         []any{map[string]any{"name": "unit", "argv": []any{"go", "test", "./..."}, "required": true}},
+	})
+	taskID := "TASK-PUBLISHED"
+	taskFile := filepath.Join(repository, "task-spec.json")
+	writeTestJSON(t, taskFile, map[string]any{
+		"schema_version": 1, "id": taskID, "type": "test", "objective": "Export a published Task.",
+		"scope": []any{"."}, "checks": []any{"unit"}, "risk": "low", "verifier": map[string]any{"required": false},
+	})
+	if _, err := taskstate.Create(repository, taskFile, false); err != nil {
 		t.Fatal(err)
 	}
-	evidence := filepath.Join(repository, ".seal", "evidence")
-	if err := os.MkdirAll(evidence, 0o700); err != nil {
+	// Reproduce the no-force writer's successful hard-link publication when
+	// both best-effort attempts to unlink its temporary name fail.
+	tasks := filepath.Join(repository, ".seal", "tasks")
+	if err := os.Link(filepath.Join(tasks, taskID+".json"), filepath.Join(tasks, ".task.tmp-"+strings.Repeat("0", 32))); err != nil {
 		t.Fatal(err)
 	}
-	for index := 0; index <= exportEntryLimit; index++ {
-		if err := os.WriteFile(filepath.Join(evidence, fmt.Sprintf("TASK-%05d", index)), nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	before := snapshotTree(t, repository)
+	beforeTimes := exportFileTimes(t, repository)
 	report, err := ExportRuns(repository, "test")
-	if err != nil || report.ScanComplete || len(report.Runs) != 0 || !hasExportIssue(report, "scan_limit") {
-		t.Fatalf("limit = %#v, %v", report, err)
+	if err != nil || !report.ScanComplete || len(report.Issues) != 0 || len(report.Tasks) != 1 ||
+		report.Tasks[0].TaskID != taskID || len(report.Runs) != 0 {
+		t.Fatalf("published Task with residual temporary link = %#v, %v", report, err)
+	}
+	if !reflect.DeepEqual(before, snapshotTree(t, repository)) ||
+		!reflect.DeepEqual(beforeTimes, exportFileTimes(t, repository)) {
+		t.Fatal("export changed the published Task or temporary link")
 	}
 }
 
