@@ -181,12 +181,16 @@ func TestExportHistoricalCompletionWithoutCurrentSourceObservation(t *testing.T)
 		t.Fatal(err)
 	}
 	before := exportFileTimes(t, fixture.repository)
+	beforeContents := snapshotTree(t, fixture.repository)
 	report, err := ExportRuns(fixture.repository, "test")
 	if err != nil || !report.ScanComplete || report.Runs[0].CompletionRecord.State != "recorded_pass" || report.Runs[0].CompletionRecord.CompletedAt == nil {
 		t.Fatalf("historical completion = %#v, %v", report, err)
 	}
-	if !reflect.DeepEqual(before, exportFileTimes(t, fixture.repository)) {
-		t.Fatal("historical export changed state")
+	if after := exportFileTimes(t, fixture.repository); !reflect.DeepEqual(before, after) {
+		t.Fatalf("historical export changed modification times\nbefore: %#v\nafter: %#v", before, after)
+	}
+	if !reflect.DeepEqual(beforeContents, snapshotTree(t, fixture.repository)) {
+		t.Fatal("historical export changed repository contents")
 	}
 }
 
@@ -515,12 +519,23 @@ func copyExportRun(t *testing.T, fixture runFixture, taskID, runID string) {
 
 func exportFileTimes(t *testing.T, root string) map[string]time.Time {
 	t.Helper()
+	opened, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
 	result := make(map[string]time.Time)
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(root, func(path string, _ os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		info, err := entry.Info()
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		// Windows DirEntry.Info retains enumeration metadata, which can be
+		// stale on NTFS. Root.Lstat reads current attributes through a handle.
+		info, err := opened.Lstat(relative)
 		if err != nil {
 			return err
 		}
