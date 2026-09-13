@@ -200,7 +200,8 @@ func (report *ExportReport) exportTasks(repository string, seal *os.Root) {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".tmp-") {
+		if strings.HasPrefix(name, ".tmp-") || strings.HasPrefix(name, ".task.tmp-") {
+			// Task publication may leave its private temporary link after commit.
 			continue
 		}
 		if !strings.HasSuffix(name, ".json") {

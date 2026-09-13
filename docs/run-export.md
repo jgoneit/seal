@@ -116,10 +116,13 @@ No issue prose, filesystem path, or raw validator error is exposed.
 Each directory permits at most 10,000 entries; detection reads one extra entry.
 An oversized directory contributes no arbitrary directory-order subset. At
 most 10,000 candidate Runs are examined across Task directories, including
-invalid candidates. Private `.tmp-` entries are ignored until final publication,
-but still count toward directory entry limits. Each before/after inventory is
-bounded by 100,000 entries, 64 MiB of metadata-document hashing, and recursive
-depth 32 starting at `.seal/tasks` or `.seal/evidence`. A bound reports
+invalid candidates. Private `.tmp-*` entries and the Task writer's `.task.tmp-*`
+entries are ignored when selecting published identities, but still count toward
+directory entry limits. A successful Task publication may leave its private file
+when cleanup fails; export neither reports it as an invalid Task nor removes it.
+Each before/after inventory is bounded by 100,000 entries, 64 MiB of
+metadata-document hashing, and recursive depth 32 starting at `.seal/tasks` or
+`.seal/evidence`. A bound reports
 `scan_limit`; it is never evidence of a complete inventory. Completion reads
 are capped at 64 KiB; an oversized Completion reports `invalid_completion`.
 
