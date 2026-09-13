@@ -106,6 +106,26 @@ jobs:
           go build -o "${binary}" ./cmd/seal
           "${binary}" --help
           "${binary}" --version
+          "${binary}" run export --help
+          export_repo="$(mktemp -d "${RUNNER_TEMP}/seal-export-smoke.XXXXXX")"
+          git -C "${export_repo}" init --quiet
+          (
+            cd "${export_repo}"
+            "${binary}" run export --format json
+          ) > "${RUNNER_TEMP}/seal-empty-export.json"
+          python3 - "${RUNNER_TEMP}/seal-empty-export.json" "$("${binary}" --version)" <<'PY'
+          import json
+          import sys
+          with open(sys.argv[1], encoding="utf-8") as source:
+              result = json.load(source)
+          assert result == {
+              "schema": "seal-run-export/v1",
+              "exporter_version": sys.argv[2],
+              "scan_complete": True,
+              "tasks": [], "runs": [], "issues": [],
+          }, result
+          PY
+          test ! -e "${export_repo}/.seal"
 
       - name: Build and smoke-test CLI
         if: runner.os == 'Windows'
@@ -115,6 +135,33 @@ jobs:
           go build -o $binary ./cmd/seal
           & $binary --help
           & $binary --version
+          & $binary run export --help
+          if ($LASTEXITCODE -ne 0) { throw "export help failed" }
+          $exportRepo = Join-Path $env:RUNNER_TEMP ("seal-export-smoke-" + [Guid]::NewGuid())
+          New-Item -ItemType Directory -Path $exportRepo | Out-Null
+          git -C $exportRepo init --quiet
+          if ($LASTEXITCODE -ne 0) { throw "export smoke repository creation failed" }
+          Push-Location $exportRepo
+          try {
+            $exportJSON = & $binary run export --format json
+            if ($LASTEXITCODE -ne 0) { throw "empty export failed" }
+          } finally {
+            Pop-Location
+          }
+          $export = ($exportJSON -join "`n") | ConvertFrom-Json -AsHashtable
+          $version = & $binary --version
+          $expectedKeys = @('schema', 'exporter_version', 'scan_complete', 'tasks', 'runs', 'issues')
+          if ($export.Count -ne 6 -or @($expectedKeys | Where-Object { -not $export.ContainsKey($_) }).Count -ne 0 -or
+              $export.schema -cne 'seal-run-export/v1' -or $export.exporter_version -cne $version -or
+              $export.scan_complete -isnot [bool] -or -not $export.scan_complete) {
+            throw "unexpected empty export envelope"
+          }
+          foreach ($field in @('tasks', 'runs', 'issues')) {
+            if ($export[$field] -isnot [array] -or $export[$field].Count -ne 0) {
+              throw "unexpected empty export array: $field"
+            }
+          }
+          if (Test-Path (Join-Path $exportRepo '.seal')) { throw "export created state" }
 
       - name: Check whitespace errors
         run: git diff --check
