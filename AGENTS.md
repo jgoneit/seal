@@ -17,8 +17,12 @@ These instructions apply to the entire repository.
 
 - Reproduce external contracts and outcomes; do not translate Python package,
   class, helper, Legacy Plugin, Legacy Skill, or test-suite structure.
-- Justify new behavior with a conformance scenario from the reference.
-- Do not add new product features during compatibility migration.
+- Justify migrated behavior with a conformance scenario from the reference.
+- Do not add new product features during compatibility migration, except the
+  explicitly user-approved `seal run export --format json` query extension in
+  [the migration charter](MIGRATION_CHARTER.md#approved-read-only-run-export-extension).
+  That extension uses its documented export contract and regression scenarios;
+  it changes no Acceptance semantics and approves no general canonical transition.
 - Do not infer a latest Task or Run, retry or repair work, execute reviewers,
   enforce security policy, or add Knowledge-plane behavior.
 - Do not create a common Toolkit runtime, event bus, provider registry, central

@@ -51,10 +51,16 @@ seal task create --file <TASK_JSON> [--force]
 seal task show <TASK_ID>
 seal verify <TASK_ID>
 seal run show <TASK_ID> --run-id <RUN_ID>
+seal run export --format json
 seal complete <TASK_ID> --run-id <RUN_ID>
 ```
 
 The checked-in version is `0.3.0-rc.4`.
+The published `v0.3.0-rc.4` binary does **not** include `run export`. Export
+support in this change is identified by its exact reviewed Git commit and the
+`seal-run-export/v1` contract, not the unchanged `--version` string. This change
+does not publish a new RC or extend existing RC acceptance evidence to this
+binary.
 
 `task create` validates and normalizes a Task Spec, resolves catalog check
 references, records the repository's current full HEAD as its baseline, and
@@ -76,6 +82,16 @@ documents and raw-byte Run Manifest through one canonical read boundary, and
 then returns the transient `validated-run-summary/v1` view. A structurally
 valid failed Run still returns exit 0; missing, unsafe, unsupported, tampered,
 or contradictory Evidence returns exit 8.
+
+`run export --format json` inventories validated stored Tasks and Runs in the
+current repository and returns the bounded `seal-run-export/v1` projection.
+It uses the same Evidence validation boundary as `run show`, reports partial
+scans with JSON and exit 8, and exposes historical Completion records without
+observing current source or granting current Acceptance. It does not execute
+checks, write state, or select a latest Run. Paths, commands, objectives, and
+logs are omitted; caller-chosen Task and Run IDs remain identifiable. See
+[Run export](docs/run-export.md) for fields, collection limits, and
+interpretation boundaries.
 
 `complete` validates one exact Run, observes current source as S2, applies the
 fixed Basic Acceptance gates, and atomically records or reuses an immutable v2
@@ -193,6 +209,9 @@ See [RELEASING.md](RELEASING.md) for the native build and publication contract.
 Future functionality is added only as a narrow vertical slice justified by a
 behavioral contract from the Python reference. The goal is reproduction of
 established Acceptance meaning and outcomes, not new product design.
+The explicitly approved read-only Run export is a narrow interface extension
+recorded in [MIGRATION_CHARTER.md](MIGRATION_CHARTER.md); it reuses canonical
+validation and does not change stored schemas or Acceptance semantics.
 
 The first compatibility slice covers exact read-only `task show` and `run show`
 identities using fixtures derived from the frozen reference. The second covers

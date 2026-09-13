@@ -96,6 +96,10 @@ func (store *completionStore) validateBinding() error {
 }
 
 func (store *completionStore) readExisting(validated *ValidatedRun) ([]byte, error) {
+	return store.readExistingBounded(validated, 0)
+}
+
+func (store *completionStore) readExistingBounded(validated *ValidatedRun, limit int64) ([]byte, error) {
 	if err := store.validateBinding(); err != nil {
 		return nil, err
 	}
@@ -118,10 +122,17 @@ func (store *completionStore) readExisting(validated *ValidatedRun) ([]byte, err
 		_ = file.Close()
 		return nil, completionEvidenceError("completion.json changed while it was being opened.", statErr)
 	}
-	contents, readErr := io.ReadAll(file)
+	var reader io.Reader = file
+	if limit > 0 {
+		reader = io.LimitReader(file, limit+1)
+	}
+	contents, readErr := io.ReadAll(reader)
 	closeErr := file.Close()
 	if readErr != nil || closeErr != nil {
 		return nil, completionEvidenceError("Could not read completion.json.", errors.Join(readErr, closeErr))
+	}
+	if limit > 0 && int64(len(contents)) > limit {
+		return nil, &EvidenceError{message: "completion.json exceeds the export read limit."}
 	}
 	if err := validateCompletionRecord(contents, validated); err != nil {
 		return nil, err

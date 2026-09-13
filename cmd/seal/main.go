@@ -21,6 +21,7 @@ Usage:
   seal task show <TASK_ID>
   seal verify <TASK_ID>
   seal run show <TASK_ID> --run-id <RUN_ID>
+  seal run export --format json
   seal complete <TASK_ID> --run-id <RUN_ID>
 
 Options:
@@ -86,10 +87,17 @@ func isInformationalCommand(args []string) bool {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "--version") {
 		return true
 	}
-	return taskCreateHelpRequested(args) || verifyHelpRequested(args) || completeHelpRequested(args)
+	return taskCreateHelpRequested(args) || verifyHelpRequested(args) || completeHelpRequested(args) || exportHelpRequested(args)
 }
 
 func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
+	if exportHelpRequested(args) {
+		fmt.Fprint(stdout, exportHelp)
+		return 0
+	}
+	if len(args) >= 2 && args[0] == "run" && args[1] == "export" {
+		return exportRuns(cwd, args[2:], stdout, stderr)
+	}
 	if len(args) == 1 {
 		switch args[0] {
 		case "--help":
@@ -145,7 +153,7 @@ func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
 		return completeTask(cwd, taskID, runID, stdout, stderr)
 	}
 
-	return commandUsage(stderr, "expected --help, --version, task create, task show, verify, run show, or complete")
+	return commandUsage(stderr, "expected --help, --version, task create, task show, verify, run show, run export, or complete")
 }
 
 func completeTask(cwd, taskID, runID string, stdout, stderr io.Writer) int {
