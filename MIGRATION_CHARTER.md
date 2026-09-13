@@ -9,7 +9,8 @@ successor.
 - Go Seal reproduces contracts and outcomes, not Python structure.
 - No new product feature is added during migration except an explicitly
   approved extension named in this charter.
-- Every behavior change must be justified by conformance.
+- Every compatibility behavior change must be justified by conformance;
+  an approved interface extension uses its own contract and regression scenarios.
 - Seal owns Acceptance only.
 - Seal never invokes another Toolkit module.
 - Seal does not select or execute a reviewer.
@@ -139,6 +140,10 @@ transition adds no Bundle, Reviewer, retry, repair, latest identity, or
 automatic execution behavior.
 
 ## Approved read-only Run export extension
+
+Approval scope: the user's 2026-09-13 implementation plan, "Seal Run exporter
+정식화 및 Eval 인계", explicitly authorizes this official query interface while
+excluding Acceptance changes, RC publication, and installation replacement.
 
 `seal run export --format json` is an explicitly approved, narrow public
 interface extension beyond the frozen Python command surface. It inventories
