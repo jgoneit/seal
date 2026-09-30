@@ -99,9 +99,11 @@ func TestDecodeClassifiesPythonFailures(t *testing.T) {
 
 func TestDecodeReportsTheFirstFailureInDocumentOrder(t *testing.T) {
 	oversized := strings.Repeat("9", IntegerDigitLimit+1)
-	isLimit := func(err error) bool {
+	// A constant key is a syntax error, so an earlier integer failure keeps it
+	// in Syntax for callers that classify syntax first.
+	isLimitBeforeKey := func(err error) bool {
 		var limit *IntegerLimitError
-		return errors.As(err, &limit)
+		return errors.As(err, &limit) && errors.Is(limit.Syntax, errConstantKey)
 	}
 	isConstantKey := func(err error) bool { return errors.Is(err, errConstantKey) }
 	tests := []struct {
@@ -109,10 +111,13 @@ func TestDecodeReportsTheFirstFailureInDocumentOrder(t *testing.T) {
 		input string
 		check func(error) bool
 	}{
-		{"integer before key", `{"a": ` + oversized + `, "b": 1, NaN: 1}`, isLimit},
+		{"integer before key", `{"a": ` + oversized + `, "b": 1, NaN: 1}`, isLimitBeforeKey},
 		{"key before integer", `{"b": 1, Infinity : 1, "a": ` + oversized + `}`, isConstantKey},
-		{"nested integer before key", `[{"a": [` + oversized + `]}, {"c": 1, -Infinity: 2}]`, isLimit},
+		{"nested integer before key", `[{"a": [` + oversized + `]}, {"c": 1, -Infinity: 2}]`, isLimitBeforeKey},
 		{"nested key before integer", `[{"c": 1, NaN: 2}, {"a": ` + oversized + `}]`, isConstantKey},
+		{"key before integer and syntax error", `{NaN:1,"a":` + oversized + `,}`, isConstantKey},
+		{"integer before key and syntax error", `{"a":` + oversized + `,NaN:1,}`, isLimitBeforeKey},
+		{"key before integer and trailing value", `{NaN:1,"a":` + oversized + `} []`, isConstantKey},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
