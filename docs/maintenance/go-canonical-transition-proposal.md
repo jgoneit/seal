@@ -76,7 +76,7 @@ see required step 7.
 | `NaN`/`Infinity` token in a saved Task | decode fails in `readSavedTask`: identity error, exit 2 |
 | `NaN`/`Infinity` token in Run documents, including today's valid `NaN` durations | Evidence decode fails, exit 8 |
 | Lone-surrogate escape such as `\udcff` | not rejected: replaced with U+FFFD. Matching saved and Evidence copies can still compare equal, so the Run stays valid, but `task show` bytes change (see `task_surrogateescape_dcff`) |
-| Invalid raw UTF-8 | replaced with U+FFFD instead of today's exit 1 unless the explicit guard is kept |
+| Invalid raw UTF-8 | replaced with U+FFFD unless the explicit guard is kept, instead of today's outcome at each boundary: exit 1 for `task show` and `task create`, identity error (exit 2) for the saved Task during Run validation, and Evidence error (exit 8) for an Evidence JSON document |
 | Saved Task and Evidence `task.json` equal only under Python equality | Task mismatch, exit 2 |
 | Evidence document equal to its expected value only under Python equality (such as `effective_timeout: 300.0` for a Task timeout of `300`) | Evidence error, exit 8 |
 | Integer longer than 4,300 digits | today exit 1; accepted (exit 0) |
@@ -110,7 +110,11 @@ Additionally introduce Task schema v2 and Evidence schema v3 restricted to
 RFC 8259 values (no NaN/Infinity, no lone surrogates), while keeping v1/v2
 readers. RFC 8259 fixes syntax, not bytes, so the new versions must also define
 a versioned canonical encoding for digest payloads (key order, separators,
-escaping, number spelling) and how readers select it from the schema version.
+escaping, number spelling). Today only `verification.json` carries the Evidence
+schema version, while `run-manifest.json` and each Source Snapshot require
+schema version 1 and are parsed first. B therefore needs new versions of the
+manifest and Source Snapshot documents themselves, linked from
+`verification.json`, so each digest's encoding is chosen from its own document.
 
 - Simplifies what new Runs contain and can later retire parity code once no
   supported store holds old versions.
@@ -119,7 +123,12 @@ escaping, number spelling) and how readers select it from the schema version.
 
 ### C. Hard cut
 
-Drop Python parity and declare earlier stores unsupported.
+Drop Python JSON parity and declare earlier stores unsupported. The non-JSON
+parity rows above (`argparse`-shaped option handling and help, and the frozen
+read semantics) stay as Go policy and are not part of the savings. Dropping them
+too would change option-ordering and help outcomes for new invocations and
+break exact lookups through symlinked saved Tasks or the walk-up-to-`.git`
+rule, even for stores that hold only ordinary JSON.
 
 - Deletes most `pyjson` decoding edge cases, Python equality, the runtime
   exit-1 categories, the parity-specific corpus cases, and the Reference-capture
