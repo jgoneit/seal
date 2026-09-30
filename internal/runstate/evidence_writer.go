@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 const runAllocationAttempts = 100
@@ -330,7 +332,7 @@ func (writer *evidenceWriter) writeManifest(evidenceFiles []string) error {
 		"run_id":         writer.runID,
 		"files":          records,
 	}
-	canonical, err := canonicalJSON(payload, false)
+	canonical, err := pyjson.Encode(payload, pyjson.Options{})
 	if err != nil {
 		return &RepositoryError{message: "Could not compute the Evidence manifest digest."}
 	}

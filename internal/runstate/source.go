@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 type sourceSnapshot struct {
@@ -90,7 +92,7 @@ func validateSourceBindingContext(
 	if !ok {
 		return false, &EvidenceError{message: "verification.json source_stable_during_checks must be a boolean."}
 	}
-	computedStable := jsonEqual(map[string]any(before.document), map[string]any(after.document))
+	computedStable := pyjson.Equal(map[string]any(before.document), map[string]any(after.document))
 	if recordedStable != computedStable {
 		return false, &EvidenceError{message: "verification.json source_stable_during_checks does not match the persisted pre-check and post-check Source Snapshots."}
 	}
@@ -195,7 +197,7 @@ func parseSourceSnapshotContext(ctx context.Context, document jsonObject) (sourc
 			if !ok || mode != "100644" && mode != "100755" && mode != "120000" {
 				return sourceSnapshot{}, fmt.Errorf("Source Snapshot entry %d has an unsupported mode.", index)
 			}
-			size, ok := isJSONInteger(entry["size_bytes"])
+			size, ok := pyjson.Integer(entry["size_bytes"])
 			if !ok || !nonNegativeInteger(size) {
 				return sourceSnapshot{}, fmt.Errorf("Source Snapshot entry %d size_bytes must be non-negative.", index)
 			}
@@ -232,7 +234,7 @@ func parseSourceSnapshotContext(ctx context.Context, document jsonObject) (sourc
 		"baseline":       baseline,
 		"entries":        payloadEntries,
 	}
-	canonical, err := canonicalJSON(payload, true)
+	canonical, err := pyjson.Encode(payload, pyjson.Options{ASCII: true})
 	if err != nil {
 		return sourceSnapshot{}, err
 	}
@@ -266,7 +268,7 @@ func validateSourcePath(path string) error {
 func sourcePathSortKey(path string) ([]byte, error) {
 	key := make([]byte, 0, len(path))
 	for index := 0; index < len(path); {
-		if unit, width, ok := encodedSurrogate(path[index:]); ok {
+		if unit, width, ok := pyjson.LoneSurrogate(path[index:]); ok {
 			if unit < 0xdc80 || unit > 0xdcff {
 				return nil, fmt.Errorf("unsupported surrogate")
 			}

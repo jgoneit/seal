@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"sort"
 	"strings"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 type manifestRecord struct {
@@ -105,7 +107,7 @@ func validateManifestContext(ctx context.Context, runDirectory, taskID, runID st
 		"run_id":         runID,
 		"files":          payloadRecords,
 	}
-	canonical, err := canonicalJSON(payload, false)
+	canonical, err := pyjson.Encode(payload, pyjson.Options{})
 	if err != nil {
 		return "", &EvidenceError{message: "run-manifest.json evidence_sha256 could not be recomputed."}
 	}
@@ -150,7 +152,7 @@ func validateManifestRecordsContext(ctx context.Context, raw []any, expectedFile
 			return nil, &EvidenceError{message: context + ".path duplicates '" + path + "'."}
 		}
 		seen[path] = struct{}{}
-		size, ok := isJSONInteger(document["size_bytes"])
+		size, ok := pyjson.Integer(document["size_bytes"])
 		if !ok || !nonNegativeInteger(size) {
 			return nil, &EvidenceError{message: context + ".size_bytes must be a non-negative integer."}
 		}
