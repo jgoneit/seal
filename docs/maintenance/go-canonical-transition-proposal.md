@@ -44,30 +44,42 @@ parity that a transfer could remove.
 
 ## What a transition cannot remove
 
-Stored Evidence is validated by recomputing digests over canonical JSON:
-`evidence_sha256` (manifest records) and the Source Snapshot digest (ASCII,
-sorted, Python `json.dumps` bytes). Both payloads hold only strings and integers;
-floats such as check durations live in artifacts whose raw bytes are hashed,
-not re-encoded. Every existing `.seal/evidence` Run, whether
-Python- or Go-written, can only be re-validated by an encoder that reproduces
-those exact bytes. The same holds for saved Task snapshots that already contain
-Python-specific values.
+Validating an existing store needs three separate things from `pyjson`:
 
-Therefore the canonical encoder and the decoder features that stored documents
-can contain must stay for as long as existing stores must validate. Seal has no
-migration tool and the charter forbids automatic repair. What removal would
-change depends on the document and the value:
+1. **Digest encoding.** `evidence_sha256` (manifest records) and the Source
+   Snapshot digest are recomputed over canonical JSON. Both payloads hold only
+   strings and integers, so old-store validation needs the encoder's key order,
+   separators, and ASCII escapes, but not Python float `repr`.
+2. **Decoding.** Run validation decodes the saved Task and every Evidence
+   document. Those documents may contain Python-only tokens (valid Runs can hold
+   `NaN` in `verification.json` `duration` or `checks.json` `duration_seconds`),
+   lone-surrogate escapes, or bytes the explicit UTF-8 guard classifies.
+3. **Python equality.** The saved Task is compared with Evidence `task.json`
+   through `pyjson.Equal`, where `true == 1` and `1 == 1.0`. Neither copy is
+   re-encoded; the manifest hashes the Evidence file's raw bytes.
 
-| Stored content | Effect of replacing `pyjson` with a strict Go decoder/encoder |
+Task rendering (`task show`) and the bytes of newly written documents are not
+old-store requirements. Keeping them stable is a policy choice within option A.
+
+Replacing `pyjson` with `encoding/json` defaults would affect existing stores
+as follows:
+
+| Stored content | Outcome |
 |---|---|
-| Saved Task with a Python-only value (NaN/Infinity, lone surrogate) | `readSavedTask` fails before Evidence is read: identity error, exit 2 |
-| Run documents (`task.json`, manifest, Source Snapshot) with such values, or a digest payload rendered differently (key order, separators, ASCII escapes) | Evidence validation fails, exit 8 |
-| Floats rendered with Python `repr` | no effect on existing stores; only newly written bytes and public output would change |
-| Integer longer than 4,300 digits | today runtime exit 1; without the guard it would be accepted (exit 0), which changes the outcome the other way |
-| Only the JSON subset both implementations render identically | stays valid, provided the canonical encoder keeps the same bytes |
+| `NaN`/`Infinity` token in a saved Task | decode fails in `readSavedTask`: identity error, exit 2 |
+| `NaN`/`Infinity` token in Run documents, including today's valid `NaN` durations | Evidence decode fails, exit 8 |
+| Lone-surrogate escape such as `\udcff` | not rejected: replaced with U+FFFD. Matching saved and Evidence copies can still compare equal, so the Run stays valid, but `task show` bytes change (see `task_surrogateescape_dcff`) |
+| Invalid raw UTF-8 | replaced with U+FFFD instead of today's exit 1 unless the explicit guard is kept |
+| Saved Task and Evidence values equal only under Python equality (`true`/`1`, `1`/`1.0`) | Task mismatch, exit 2 |
+| Integer longer than 4,300 digits | today exit 1; would be accepted (exit 0) |
+| Manifest and Source Snapshot digest payloads | stay valid if the encoder keeps key order, separators, and ASCII escapes |
+| Ordinary floats rendered with Python `repr` | no effect on validation; changes only new bytes and `task show`/`run show` output |
 
-Seal cannot tell ahead of time which stores fall into which class, so option A
-keeps the whole layer.
+Seal has no migration tool and the charter forbids automatic repair, and it
+cannot tell ahead of time which stores fall into which rows. Old-store
+validation therefore needs the decoder features, Python equality, and the
+string/integer rules of the canonical encoder. Option A additionally keeps float
+`repr` and Task rendering so that new writes and public output do not change.
 
 ## Options
 
@@ -99,10 +111,13 @@ while keeping v1/v2 readers.
 
 Drop Python parity and declare earlier stores unsupported.
 
-- Deletes most of `pyjson` decoding edge cases, runtime exit-1 categories, and
-  the corpus (several thousand lines).
-- Existing Tasks, Runs, and Completions with Python-specific values or
-  rendering stop validating, with the exit categories shown above; exact lookup
+- Deletes most `pyjson` decoding edge cases, Python equality, the runtime
+  exit-1 categories, the parity-specific corpus cases, and the Reference-capture
+  machinery. Corpus cases for Acceptance semantics (Task/Run identity, manifest
+  hash and size corruption, missing Evidence, Scope, symlinks) must stay as
+  Go-owned scenarios, so the saving is smaller than the corpus size.
+- Existing Tasks, Runs, and Completions in the affected rows above stop
+  validating or change outcome; exact lookup
   and Completion from those states are lost. Because affected stores cannot be
   identified in advance, this contradicts the current migration invariants and
   the RC acceptance history.
