@@ -26,7 +26,7 @@ duplicate implementations, repeated work, and bounded over-design.
 | 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | done | [#29](https://github.com/jgoneit/seal/pull/29) |
 | 5 | Fewer repeated Git subprocesses during source observation | done | [#30](https://github.com/jgoneit/seal/pull/30) |
 | 6 | Simpler `run export` concurrent-change detection | done | [#31](https://github.com/jgoneit/seal/pull/31) |
-| 7 | Go canonical transition proposal for Legacy byte-parity code | pending | |
+| 7 | Go canonical transition proposal for Legacy byte-parity code | proposed, awaiting decision | [#32](https://github.com/jgoneit/seal/pull/32) |
 
 ## Task notes
 
@@ -87,7 +87,14 @@ detected, and its regression scenario was removed.
 
 ### 7. Canonical transition
 
-See the proposal added by task 7.
+[`go-canonical-transition-proposal.md`](go-canonical-transition-proposal.md)
+recommends transferring behavioral authority to Go while keeping every stored
+schema byte-for-byte. Existing stores stay valid only with three independent
+parts of `pyjson`: digest encoding for the string/integer manifest and Source
+Snapshot payloads, Python-compatible decoding (for example valid `NaN`
+durations), and Python equality between stored values. Most parity code is
+therefore permanent while old stores must remain valid. No code changes until
+the charter records a decision.
 
 ## Follow-ups not scheduled
 
