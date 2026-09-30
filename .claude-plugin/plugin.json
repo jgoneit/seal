@@ -1,0 +1,19 @@
+{
+  "name": "seal",
+  "version": "0.3.0-rc.4+claude.20260930140938",
+  "description": "Evidence-backed Acceptance for Native Coding Agent work.",
+  "author": {
+    "name": "Jaegon Seo",
+    "url": "https://github.com/jgoneit"
+  },
+  "homepage": "https://github.com/jgoneit/seal",
+  "repository": "https://github.com/jgoneit/seal",
+  "license": "MIT",
+  "keywords": [
+    "acceptance",
+    "coding-agent",
+    "completion",
+    "evidence",
+    "verification"
+  ]
+}
