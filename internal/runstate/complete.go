@@ -72,7 +72,6 @@ func Complete(cwd, taskID, runID string) (*CompletionRun, error) {
 }
 
 type completeHooks struct {
-	observeSnapshot   func(sourceobs.SnapshotRequest) (sourceobs.SnapshotResult, error)
 	now               func() time.Time
 	writerFault       func(string) error
 	tempNameGenerator func() (string, error)
@@ -95,11 +94,7 @@ func completeWithHooks(cwd, taskID, runID string, hooks completeHooks) (*Complet
 		return nil, err
 	}
 
-	observe := hooks.observeSnapshot
-	if observe == nil {
-		observe = sourceobs.ObserveSnapshot
-	}
-	current, err := observe(sourceobs.SnapshotRequest{
+	current, err := sourceobs.ObserveSnapshot(sourceobs.SnapshotRequest{
 		CWD:      validated.repository,
 		Baseline: validated.baseline,
 	})

@@ -81,9 +81,6 @@ func TestRunCLIExportInputAndOutputFailures(t *testing.T) {
 
 func TestRunExportHelpRequiresNoRepository(t *testing.T) {
 	args := []string{"run", "export", "--help"}
-	if !isInformationalCommand(args) {
-		t.Fatal("export help must not require cwd")
-	}
 	var stdout, stderr bytes.Buffer
 	if code := runCLI("", args, &stdout, &stderr); code != 0 || stdout.String() != exportHelp || stderr.Len() != 0 {
 		t.Fatalf("help code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
