@@ -95,21 +95,11 @@ func resolveContext(ctx context.Context, cwd, baseline string) (repositoryContex
 	if err != nil || resolvedBaseline != baseline {
 		return repositoryContext{}, repositoryFailure("Task baseline does not resolve to its exact saved commit.", err)
 	}
-	if err := checkRepositoryGuards(ctx, root); err != nil {
-		return repositoryContext{}, err
-	}
+	// readIndexState checks the replacement-ref and sparse-checkout guards first.
 	if _, err := readIndexState(ctx, root); err != nil {
 		return repositoryContext{}, err
 	}
-	baselineEntries, err := readBaselineTree(ctx, root, baseline)
-	if err != nil {
-		return repositoryContext{}, err
-	}
-	return repositoryContext{
-		root:            root,
-		baseline:        baseline,
-		baselineEntries: baselineEntries,
-	}, nil
+	return repositoryContext{root: root, baseline: baseline}, nil
 }
 
 func resolveCommit(ctx context.Context, root, reference string) (string, error) {

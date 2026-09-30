@@ -200,9 +200,32 @@ func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 	}
 }
 
+func TestEachSnapshotRereadsBaselineObjects(t *testing.T) {
+	repository, baseline := basicFixture(t)
+	if _, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline}); err != nil {
+		t.Fatalf("ObserveSnapshot(before) error = %v", err)
+	}
+	// A check may remove a baseline blob while leaving the worktree unchanged;
+	// the next snapshot must fail rather than reuse the earlier identity.
+	blob := strings.TrimSpace(repository.git("rev-parse", baseline+":src/base.txt"))
+	object := filepath.Join(repository.root, ".git", "objects", blob[:2], blob[2:])
+	if err := os.Chmod(object, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(object); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	assertErrorKind(t, err, RepositoryState, "baseline blob")
+}
+
 func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
 	repository, baseline := basicFixture(t)
 	repositoryContext, err := resolveContext(context.Background(), repository.root, baseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repositoryContext.baselineEntries, err = readBaselineTree(context.Background(), repository.root, baseline)
 	if err != nil {
 		t.Fatal(err)
 	}

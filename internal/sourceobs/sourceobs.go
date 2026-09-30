@@ -165,6 +165,13 @@ func ObserveSnapshotContext(ctx context.Context, request SnapshotRequest) (Snaps
 		}
 		return SnapshotResult{}, err
 	}
+	repository.baselineEntries, err = readBaselineTree(ctx, repository.root, repository.baseline)
+	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return SnapshotResult{}, contextErr
+		}
+		return SnapshotResult{}, err
+	}
 	baselineBlobs := make(map[string]blobIdentity)
 	first, err := collectSnapshotObservation(ctx, repository, baselineBlobs)
 	if err != nil {

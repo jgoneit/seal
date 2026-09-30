@@ -77,6 +77,9 @@ The externally meaningful order is:
 10. atomically publish the complete Run directory and print its identity.
 
 S0 and S1 each observe final product source exactly twice without retry.
+Each snapshot reads the baseline tree and every baseline blob it compares
+itself, so a baseline object removed or corrupted by a check fails S1 as a
+repository failure.
 Disagreement within either bounded collection is a repository failure. A
 stable S0 that differs from a stable S1 is instead recorded as
 `source_stable_during_checks: false`; the Run still publishes with exit `0`.

@@ -23,8 +23,8 @@ duplicate implementations, repeated work, and bounded over-design.
 | 1 | CLI cleanup: list `run export` in the usage synopsis, drop the redundant informational-command branch, drop the unused Completion observation hook | done | [#26](https://github.com/jgoneit/seal/pull/26) |
 | 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | done | [#27](https://github.com/jgoneit/seal/pull/27) |
 | 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | done | [#28](https://github.com/jgoneit/seal/pull/28) |
-| 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | done | simplify/04-publish-helpers |
-| 5 | Fewer repeated Git subprocesses during source observation | pending | |
+| 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | done | [#29](https://github.com/jgoneit/seal/pull/29) |
+| 5 | Fewer repeated Git subprocesses during source observation | done | [#30](https://github.com/jgoneit/seal/pull/30) |
 | 6 | Simpler `run export` concurrent-change detection | pending | |
 | 7 | Go canonical transition proposal for Legacy byte-parity code | pending | |
 
@@ -68,8 +68,13 @@ code. Error wrapping, access masks, and identity checks stay at each call site.
 
 Each observation re-resolves the repository with 14 Git subprocesses, runs the
 repository guards twice, and change collection reads a baseline tree it never
-uses. The immutable baseline tree and blob identities can be shared within one
-`verify`; HEAD, index, guards, and untracked state are still re-checked.
+uses. Both redundant steps are removed. Baseline tree and blob identities are
+not shared between S0 and S1: each snapshot must reread the baseline objects so
+that a check which removes or corrupts one still fails S1 (review of #30).
+
+Measured on a 2,000-file repository with one changed file, one `verify` went
+from 4,093 to 4,083 Git processes; 4,004 of them are per-blob `cat-file`, so
+the remaining cost is the `cat-file --batch` follow-up below.
 
 ### 6. Export inventory
 
@@ -83,8 +88,13 @@ See the proposal added by task 7.
 
 ## Follow-ups not scheduled
 
-- Snapshot collection starts one `git cat-file blob` process per baseline blob;
-  the Reference uses one `git cat-file --batch` process.
+- Snapshot collection still starts one `git cat-file blob` process per
+  baseline blob in every snapshot; the Reference uses one
+  `git cat-file --batch` process. Batching per snapshot would remove most of
+  `verify`'s Git processes without sharing objects between snapshots.
+- `internal/checkrun` `TestEscapedDescendantHoldingPipesDoesNotBlockCollectorCleanup/context_deadline`
+  can fail under `-race` on slow runners: its one-second context deadline can
+  expire before the helper records the escaped child's PID.
 - `task create` checks the integer digit limit only after a successful decode,
   so a long integer followed by a syntax error exits 2 instead of 1, and a
   nesting-depth failure exits 2 without an approved divergence. Aligning either
