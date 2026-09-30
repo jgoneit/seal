@@ -60,6 +60,43 @@ type Request struct {
 type SnapshotRequest struct {
 	CWD      string
 	Baseline string
+	// Cache optionally shares the baseline commit's immutable tree and blob
+	// identities with later snapshots in the same command. Repository state,
+	// the index, and current source are always observed again.
+	Cache *BaselineCache
+}
+
+// BaselineCache holds one baseline commit's tree and blob identities. Both are
+// content-addressed, so reusing them cannot change a snapshot's result.
+type BaselineCache struct {
+	root     string
+	baseline string
+	entries  map[string]treeEntry
+	blobs    map[string]blobIdentity
+}
+
+// NewBaselineCache returns an empty cache for SnapshotRequest.Cache.
+func NewBaselineCache() *BaselineCache {
+	return &BaselineCache{}
+}
+
+// load sets repository.baselineEntries and returns the blob-identity map,
+// reusing a cache filled for the same worktree root and baseline.
+func (cache *BaselineCache) load(ctx context.Context, repository *repositoryContext) (map[string]blobIdentity, error) {
+	if cache != nil && cache.entries != nil && cache.root == repository.root && cache.baseline == repository.baseline {
+		repository.baselineEntries = cache.entries
+		return cache.blobs, nil
+	}
+	entries, err := readBaselineTree(ctx, repository.root, repository.baseline)
+	if err != nil {
+		return nil, err
+	}
+	repository.baselineEntries = entries
+	blobs := make(map[string]blobIdentity)
+	if cache != nil {
+		*cache = BaselineCache{root: repository.root, baseline: repository.baseline, entries: entries, blobs: blobs}
+	}
+	return blobs, nil
 }
 
 // Entry is one baseline-relative final-source entry.
@@ -165,7 +202,13 @@ func ObserveSnapshotContext(ctx context.Context, request SnapshotRequest) (Snaps
 		}
 		return SnapshotResult{}, err
 	}
-	baselineBlobs := make(map[string]blobIdentity)
+	baselineBlobs, err := request.Cache.load(ctx, &repository)
+	if err != nil {
+		if contextErr := contextFailure(ctx); contextErr != nil {
+			return SnapshotResult{}, contextErr
+		}
+		return SnapshotResult{}, err
+	}
 	first, err := collectSnapshotObservation(ctx, repository, baselineBlobs)
 	if err != nil {
 		if contextErr := contextFailure(ctx); contextErr != nil {

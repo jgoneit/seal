@@ -77,6 +77,9 @@ The externally meaningful order is:
 10. atomically publish the complete Run directory and print its identity.
 
 S0 and S1 each observe final product source exactly twice without retry.
+They share only the baseline commit's content-addressed tree and blob
+identities; repository guards, HEAD, the index, untracked files, and current
+source are observed again for every collection.
 Disagreement within either bounded collection is a repository failure. A
 stable S0 that differs from a stable S1 is instead recorded as
 `source_stable_during_checks: false`; the Run still publishes with exit `0`.

@@ -140,6 +140,7 @@ func verifyPreparedContext(
 	snapshotRequest := sourceobs.SnapshotRequest{
 		CWD:      repository,
 		Baseline: taskDefinition.baseline,
+		Cache:    sourceobs.NewBaselineCache(),
 	}
 	changesRequest := sourceobs.Request{
 		CWD:      repository,

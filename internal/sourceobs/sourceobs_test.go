@@ -200,13 +200,61 @@ func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 	}
 }
 
+func TestBaselineCacheReusesOnlyImmutableBaselineData(t *testing.T) {
+	repository, baseline := basicFixture(t)
+	repository.write("src/other.txt", []byte("other\n"), 0o644)
+	baseline = repository.commit("second baseline")
+	trace := filepath.Join(t.TempDir(), "trace")
+	t.Setenv("GIT_TRACE", trace)
+	gitCalls := func(command string) int {
+		contents, err := os.ReadFile(trace)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		return strings.Count(string(contents), " "+command+" ")
+	}
+
+	request := SnapshotRequest{CWD: repository.root, Baseline: baseline, Cache: NewBaselineCache()}
+	first, err := ObserveSnapshot(request)
+	if err != nil {
+		t.Fatalf("ObserveSnapshot(first) error = %v", err)
+	}
+	treeReads, blobReads, indexReads := gitCalls("ls-tree"), gitCalls("cat-file"), gitCalls("ls-files")
+	if treeReads != 1 || blobReads != 2 {
+		t.Fatalf("first snapshot read %d trees and %d blobs, want 1 and 2", treeReads, blobReads)
+	}
+
+	repository.write("src/base.txt", []byte("changed\n"), 0o644)
+	second, err := ObserveSnapshot(request)
+	if err != nil {
+		t.Fatalf("ObserveSnapshot(second) error = %v", err)
+	}
+	if gitCalls("ls-tree") != treeReads || gitCalls("cat-file") != blobReads {
+		t.Fatal("second snapshot re-read immutable baseline data")
+	}
+	if gitCalls("ls-files") <= indexReads {
+		t.Fatal("second snapshot did not observe the index again")
+	}
+	uncached, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	if err != nil {
+		t.Fatalf("ObserveSnapshot(uncached) error = %v", err)
+	}
+	if second.SnapshotSHA256() != uncached.SnapshotSHA256() || second.SnapshotSHA256() == first.SnapshotSHA256() {
+		t.Fatalf("cached snapshot = %s, uncached = %s, first = %s",
+			second.SnapshotSHA256(), uncached.SnapshotSHA256(), first.SnapshotSHA256())
+	}
+}
+
 func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
 	repository, baseline := basicFixture(t)
 	repositoryContext, err := resolveContext(context.Background(), repository.root, baseline)
 	if err != nil {
 		t.Fatal(err)
 	}
-	baselineBlobs := make(map[string]blobIdentity)
+	baselineBlobs, err := (*BaselineCache)(nil).load(context.Background(), &repositoryContext)
+	if err != nil {
+		t.Fatal(err)
+	}
 	before, err := collectSnapshotObservation(context.Background(), repositoryContext, baselineBlobs)
 	if err != nil {
 		t.Fatal(err)
