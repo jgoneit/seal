@@ -89,9 +89,12 @@ per class.
 - Values equal only under Python equality: between the saved Task and Evidence
   `task.json`, and between Evidence documents and their expected values (such
   as `effective_timeout: 300.0` for a Task timeout of `300`).
-- Integers longer than 4,300 digits, which exit 1 today at every boundary; after
-  replacement the outcome depends on the field (a permissive Task extra could
-  succeed, while a schema field fails its own validation).
+- Integers longer than 4,300 digits. In a syntactically valid document they
+  are a runtime failure (exit 1) today, with boundary exceptions: `task create`
+  reports invalid input (exit 2) when a later syntax error follows, and
+  `run export` reports the affected Task or Run in a partial export (exit 8).
+  After replacement the outcome depends on the field (a permissive Task extra
+  could succeed, while a schema field fails its own validation).
 - Non-normal integers such as `-0` in manifest or Source Snapshot records,
   whose digests depend on integer normalization.
 
@@ -122,8 +125,11 @@ Go becomes the behavioral authority; Python remains a historical record.
 ### B. New schema versions for new writes
 
 Additionally introduce Task schema v2 and Evidence schema v3 restricted to
-RFC 8259 values (no NaN/Infinity, no lone surrogates), while keeping v1/v2
-readers. RFC 8259 fixes syntax, not bytes, so the new versions must also define
+RFC 8259 values without NaN/Infinity and to Unicode scalar sequences (no lone
+surrogates, as `task-create-contract.md` already requires for input), while
+keeping v1/v2 readers. RFC 8259 itself permits escaped lone surrogates and
+`encoding/json` silently replaces them, so readers must validate raw escapes
+or use a decoder that preserves the distinction. RFC 8259 fixes syntax, not bytes, so the new versions must also define
 a versioned canonical encoding for digest payloads (key order, separators,
 escaping, number spelling). Today only `verification.json` carries the Evidence
 schema version, while `run-manifest.json` and each Source Snapshot require
@@ -151,11 +157,13 @@ rule, even for stores that hold only ordinary JSON.
   hash and size corruption, missing Evidence, Scope, symlinks) must stay as
   Go-owned scenarios, so the saving is smaller than the corpus size.
 - Existing Tasks, Runs, and Completions in the affected classes above stop
-  validating or change outcome. Beyond exact lookup and Completion, `verify`
-  reads the saved Task first and can no longer produce a Run for an affected
-  Task. `run export` reports affected Tasks as `invalid_task` and excludes
-  affected Runs as `invalid_evidence`, so every export of that store exits 8
-  for periodic consumers.
+  validating or change outcome. Where a class is rejected or makes stored
+  values unequal (for example `NaN` tokens or Python-only equality), the loss
+  goes beyond exact lookup and Completion: `verify` reads the saved Task first
+  and can no longer produce a Run for that Task, and `run export` reports it as
+  `invalid_task` or excludes the Run as `invalid_evidence`, so exports of that
+  store exit 8. Replacement-only classes (such as `\udcff` in matching opaque
+  extras) may keep validating while changing rendered bytes.
 - New invocations change too, unless the mappings are kept independently of
   old-store support: `task-create-contract.md` requires exit 1 for invalid
   UTF-8 Task or catalog input, for unpaired surrogates, and for over-limit
