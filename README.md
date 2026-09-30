@@ -144,8 +144,9 @@ it loads in the next session:
 ```
 
 `verify` can outlast Claude Code's default foreground Bash timeout, which moves
-the command to the background rather than stopping it. The Skill waits for that
-same invocation instead of starting another `verify`. Target repositories
+the command to the background rather than stopping it. The Skill runs `verify`
+as a background command from the start and waits for that same invocation
+instead of starting another `verify`. Target repositories
 should also ignore Claude Code's local files, such as
 `.claude/settings.local.json` and `.claude/worktrees/`, so they neither block
 implicit activation as a dirty worktree nor appear as out-of-Scope changes.

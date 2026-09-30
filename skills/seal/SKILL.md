@@ -131,9 +131,11 @@ not call `run show` or `complete`; never infer an ID or inspect raw Evidence.
 `verify` can run for several minutes within Core's own time budget. If the host
 shell has a shorter timeout or moves the command to the background, wait for
 that same invocation's exit status and stdout; do not start another `verify`,
-`complete`, or cleanup while it runs. In Claude Code, run `verify` with a
-600000 ms Bash timeout or as a background command and wait for its completion
-notification. If the host terminated the process instead, report Evidence as
+`complete`, or cleanup while it runs. In Claude Code, run `verify` as a
+background Bash command and wait for its completion notification. Do not rely
+on a foreground timeout equal to Core's budget: Core's clock starts only after
+Task and check admission, so the host limit must also cover admission and a
+clean return. If the host terminated the process instead, report Evidence as
 indeterminate and do not retry or remove any `.seal` staging residue.
 
 When every selected check is required, minimize the happy path:
