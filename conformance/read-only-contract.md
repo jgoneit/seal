@@ -244,7 +244,7 @@ instead classifies this invocation precondition as repository resolution: both
 state commands with otherwise valid identities and options return exit 3,
 leave stdout empty, and write exactly
 `error: Task commands must run inside a Git repository.` followed by a newline.
-Informational `--help` and `--version` calls do not resolve the working
+Informational `--help` and `--version` calls do not depend on the working
 directory and remain exit 0 with the same bytes as in a normal directory.
 Invalid identities and command shapes are still rejected first with exit 2.
 

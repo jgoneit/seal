@@ -159,6 +159,7 @@ func TestMainStateCommandsApplyApprovedDeletedCWDRepositoryFailureWithoutWrites(
 				"       seal task show <TASK_ID>\n" +
 				"       seal verify <TASK_ID>\n" +
 				"       seal run show <TASK_ID> --run-id <RUN_ID>\n" +
+				"       seal run export --format json\n" +
 				"       seal complete <TASK_ID> --run-id <RUN_ID>\n",
 		},
 	}

@@ -71,23 +71,13 @@ func main() {
 }
 
 func runMain(args []string, stdout, stderr io.Writer) int {
-	if isInformationalCommand(args) {
-		return runCLI("", args, stdout, stderr)
-	}
-
 	workingDirectory, err := os.Getwd()
 	if err != nil {
-		// Keep argument and identity validation ahead of repository failure.
-		return runCLI("", args, stdout, stderr)
+		// Informational commands never use cwd; state commands keep argument
+		// and identity validation ahead of repository failure.
+		workingDirectory = ""
 	}
 	return runCLI(workingDirectory, args, stdout, stderr)
-}
-
-func isInformationalCommand(args []string) bool {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "--version") {
-		return true
-	}
-	return taskCreateHelpRequested(args) || verifyHelpRequested(args) || completeHelpRequested(args) || exportHelpRequested(args)
 }
 
 func runCLI(cwd string, args []string, stdout, stderr io.Writer) int {
@@ -467,6 +457,7 @@ func commandUsage(stderr io.Writer, detail string) int {
 	fmt.Fprintln(stderr, "       seal task show <TASK_ID>")
 	fmt.Fprintln(stderr, "       seal verify <TASK_ID>")
 	fmt.Fprintln(stderr, "       seal run show <TASK_ID> --run-id <RUN_ID>")
+	fmt.Fprintln(stderr, "       seal run export --format json")
 	fmt.Fprintln(stderr, "       seal complete <TASK_ID> --run-id <RUN_ID>")
 	return 2
 }
