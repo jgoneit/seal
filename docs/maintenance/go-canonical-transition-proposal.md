@@ -65,26 +65,41 @@ Validating an existing store needs three separate things from `pyjson`:
 Task rendering (`task show`) and the bytes of newly written documents are not
 old-store requirements. Keeping them stable is a policy choice within option A.
 
-The examples below assume `pyjson` is replaced by `encoding/json` with
-`Decoder.UseNumber` and Go `==`/`reflect.DeepEqual` comparisons. The default
-`float64` decoding would change more (for example, it rejects a 4,301-digit
-integer and loses integer spelling). The list is illustrative, not exhaustive;
-see required step 7.
+Removing or replacing `pyjson` would change outcomes for at least these known
+classes of stored content and input. The resulting exit codes depend on the
+document, the field, and how each validator is adapted, so they are not
+predicted here; required step 7 establishes them with a regression scenario
+per class.
 
-| Stored content | Outcome |
-|---|---|
-| `NaN`/`Infinity` token in a saved Task | decode fails in `readSavedTask`: identity error, exit 2 |
-| `NaN`/`Infinity` token in Run documents, including today's valid `NaN` durations | Evidence decode fails, exit 8 |
-| Lone-surrogate escape such as `\udcff` | not rejected: replaced with U+FFFD. Matching saved and Evidence copies can still compare equal, so the Run stays valid, but `task show` bytes change (see `task_surrogateescape_dcff`) |
-| Invalid raw UTF-8 | replaced with U+FFFD unless the explicit guard is kept, instead of today's outcome at each boundary: exit 1 for `task show` and `task create`, identity error (exit 2) for the saved Task during Run validation, and Evidence error (exit 8) for an Evidence JSON document |
-| Saved Task and Evidence `task.json` equal only under Python equality | Task mismatch, exit 2 |
-| Evidence document equal to its expected value only under Python equality (such as `effective_timeout: 300.0` for a Task timeout of `300`) | Evidence error, exit 8 |
-| Integer longer than 4,300 digits | today exit 1; accepted (exit 0) |
-| Manifest or Source Snapshot record with a non-normal integer such as `-0` | digest mismatch, exit 8, unless the encoder normalizes integers |
-| Ordinary floats rendered with Python `repr` | no effect on validation; changes only new bytes and `task show`/`run show` output |
+- `NaN`/`Infinity` tokens: in saved Tasks, and in Run documents, including
+  today's valid `NaN` durations.
+- Ordinary decimal numbers: with `Decoder.UseNumber`, a duration such as `0.5`
+  arrives as `json.Number`, which today's `nonNegativeNumber` rejects unless its
+  validator is adapted; the default `float64` decoding instead loses integer
+  spelling and rejects a 4,301-digit integer.
+- Lone surrogates, in two classes. A surrogateescape escape (U+DC80–U+DCFF,
+  such as `\udcff` in `task_surrogateescape_dcff`) is preserved and rendered as
+  raw bytes today. Any other lone surrogate (such as `\ud800`) makes `task show`
+  exit 1 at rendering and `task create` exit 1 without a write. A standard
+  decoder replaces both with U+FFFD, which can make these commands succeed or
+  change their bytes.
+- Invalid raw UTF-8, whose current outcome differs by boundary: exit 1 for
+  `task show` and `task create`, identity error (exit 2) for the saved Task
+  during Run validation, and Evidence error (exit 8) for an Evidence document.
+- Values equal only under Python equality: between the saved Task and Evidence
+  `task.json`, and between Evidence documents and their expected values (such
+  as `effective_timeout: 300.0` for a Task timeout of `300`).
+- Integers longer than 4,300 digits, which exit 1 today at every boundary; after
+  replacement the outcome depends on the field (a permissive Task extra could
+  succeed, while a schema field fails its own validation).
+- Non-normal integers such as `-0` in manifest or Source Snapshot records,
+  whose digests depend on integer normalization.
+
+Ordinary float rendering (Python `repr`) does not enter either recomputed
+digest; it affects only newly written bytes and `task show`/`run show` output.
 
 Seal has no migration tool and the charter forbids automatic repair, and it
-cannot tell ahead of time which stores fall into which rows. Old-store
+cannot tell ahead of time which stores fall into which classes. Old-store
 validation therefore needs the decoder features, Python equality, and the
 string/integer rules of the canonical encoder. Option A additionally keeps float
 `repr` and Task rendering so that new writes and public output do not change.
@@ -135,7 +150,7 @@ rule, even for stores that hold only ordinary JSON.
   machinery. Corpus cases for Acceptance semantics (Task/Run identity, manifest
   hash and size corruption, missing Evidence, Scope, symlinks) must stay as
   Go-owned scenarios, so the saving is smaller than the corpus size.
-- Existing Tasks, Runs, and Completions in the affected rows above stop
+- Existing Tasks, Runs, and Completions in the affected classes above stop
   validating or change outcome. Beyond exact lookup and Completion, `verify`
   reads the saved Task first and can no longer produce a Run for an affected
   Task. `run export` reports affected Tasks as `invalid_task` and excludes
@@ -143,9 +158,9 @@ rule, even for stores that hold only ordinary JSON.
   for periodic consumers.
 - New invocations change too, unless the mappings are kept independently of
   old-store support: `task-create-contract.md` requires exit 1 for invalid
-  UTF-8 Task or catalog input and for over-limit integer tokens, which would
-  otherwise become ordinary invalid input or be accepted after replacement
-  decoding.
+  UTF-8 Task or catalog input, for unpaired surrogates, and for over-limit
+  integer tokens, which would otherwise become ordinary invalid input or be
+  accepted after replacement decoding.
 - Because affected stores cannot be
   identified in advance, this contradicts the current migration invariants and
   the RC acceptance history.
@@ -177,8 +192,9 @@ Do not choose C while any user depends on existing `.seal` state.
    stored document that must stay byte-exact. Today only cases with
    `stdout_raw_hex` are compared byte for byte.
 7. Before choosing option B or C, inventory every `pyjson` call site that
-   affects decoding, equality, or digest encoding for stored documents, with a
-   regression scenario for each affected document class and its exit code.
+   affects decoding, equality, validation, or digest encoding, with a
+   regression scenario for each affected document, field, and command boundary
+   and its exit code.
 
 ## Verification
 
