@@ -450,6 +450,35 @@ func TestShowMatchesCPythonIntegerConversionLimit(t *testing.T) {
 	}
 }
 
+func TestConstantKeyAndIntegerLimitFollowEachCommandOrder(t *testing.T) {
+	// show follows CPython: the first failure in document order wins. create
+	// keeps its syntax-first classification, and a constant key is a syntax
+	// error.
+	repository := initRepository(t)
+	tasks := filepath.Join(repository, ".seal", "tasks")
+	mustMkdirAll(t, tasks)
+	digits4301 := strings.Repeat("9", 4301)
+	tests := []struct {
+		name         string
+		contents     string
+		show, create ErrorKind
+	}{
+		{"constant key before integer", `{NaN:1,"a":` + digits4301 + `,}`, InvalidInput, InvalidInput},
+		{"integer before constant key", `{"a":` + digits4301 + `,NaN:1}`, NumericFailure, InvalidInput},
+	}
+	for index, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			taskID := fmt.Sprintf("ORDER-%d", index)
+			path := filepath.Join(tasks, taskID+".json")
+			mustWriteFile(t, path, test.contents)
+			_, err := Show(repository, taskID)
+			assertKind(t, err, test.show)
+			_, err = loadCreateJSONObject(path, "Task Spec")
+			assertKind(t, err, test.create)
+		})
+	}
+}
+
 func TestCPythonIntegerLimitDoesNotApplyToFloatExponentOrString(t *testing.T) {
 	repository := initRepository(t)
 	path := filepath.Join(repository, ".seal", "tasks", "NON-INTEGER-DIGITS.json")
