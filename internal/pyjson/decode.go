@@ -63,10 +63,7 @@ func Decode(contents []byte) (any, error) {
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
-		if containsOversizedInteger(protected[:syntaxScanLimit(protected, err)]) {
-			return nil, &IntegerLimitError{Syntax: err}
-		}
-		return nil, err
+		return nil, firstFailure(protected[:syntaxScanLimit(protected, err)], err)
 	}
 	firstValueEnd := int(decoder.InputOffset())
 	var trailing any
@@ -74,20 +71,27 @@ func Decode(contents []byte) (any, error) {
 		if err == nil {
 			err = errMultipleValues
 		}
-		if containsOversizedInteger(protected[:firstValueEnd]) {
-			return nil, &IntegerLimitError{Syntax: err}
-		}
+		return nil, firstFailure(protected[:firstValueEnd], err)
+	}
+	if err := firstFailure(protected, nil); err != nil {
 		return nil, err
 	}
-	// CPython fails at the first bad token in document order; decoded maps are
-	// unordered, so a constant key is located in the bytes before restoring.
-	if keyOffset := constantKeyOffset(protected); keyOffset >= 0 {
-		if containsOversizedInteger(protected[:keyOffset]) {
-			return nil, &IntegerLimitError{}
-		}
-		return nil, errConstantKey
-	}
 	return restore(value)
+}
+
+// firstFailure returns what CPython reports first for scanned, a protected
+// prefix that ends where err (nil for none) occurs. A constant object key is a
+// syntax error at its own offset; an oversized integer before the first syntax
+// error wins and keeps that later error in Syntax. Decoded maps are unordered,
+// so this is decided from the bytes, never while restoring.
+func firstFailure(scanned []byte, err error) error {
+	if keyOffset := constantKeyOffset(scanned); keyOffset >= 0 {
+		scanned, err = scanned[:keyOffset], errConstantKey
+	}
+	if containsOversizedInteger(scanned) {
+		return &IntegerLimitError{Syntax: err}
+	}
+	return err
 }
 
 // constantKeyOffset returns the offset of the first constant marker used as an
@@ -311,14 +315,7 @@ func restore(value any) (any, error) {
 		}
 		return restoreString(typed), nil
 	case json.Number:
-		if integer, ok := Integer(typed); ok {
-			digits := len(integer)
-			if len(integer) != 0 && integer[0] == '-' {
-				digits--
-			}
-			if digits > IntegerDigitLimit {
-				return nil, &IntegerLimitError{}
-			}
+		if _, ok := Integer(typed); ok {
 			return typed, nil
 		}
 		parsed, err := strconv.ParseFloat(string(typed), 64)
