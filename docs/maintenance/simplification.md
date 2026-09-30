@@ -22,8 +22,8 @@ duplicate implementations, repeated work, and bounded over-design.
 |---|---|---|---|
 | 1 | CLI cleanup: list `run export` in the usage synopsis, drop the redundant informational-command branch, drop the unused Completion observation hook | done | [#26](https://github.com/jgoneit/seal/pull/26) |
 | 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | done | [#27](https://github.com/jgoneit/seal/pull/27) |
-| 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | done | simplify/03-pyjson |
-| 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | pending | |
+| 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | done | [#28](https://github.com/jgoneit/seal/pull/28) |
+| 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | done | simplify/04-publish-helpers |
 | 5 | Fewer repeated Git subprocesses during source observation | pending | |
 | 6 | Simpler `run export` concurrent-change detection | pending | |
 | 7 | Go canonical transition proposal for Legacy byte-parity code | pending | |

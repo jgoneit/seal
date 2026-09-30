@@ -17,61 +17,12 @@ func createPrivateStagingDirectory(parent *os.Root, name string) (fs.FileInfo, e
 		return nil, err
 	}
 
-	currentUser, err := windows.GetCurrentProcessToken().GetTokenUser()
-	if err != nil {
-		return nil, err
-	}
-	currentUserSID, err := currentUser.User.Sid.Copy()
-	if err != nil {
-		return nil, err
-	}
-	localSystemSID, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
-	if err != nil {
-		return nil, err
-	}
-
 	var pinner runtime.Pinner
-	pinner.Pin(currentUserSID)
-	pinner.Pin(localSystemSID)
 	defer pinner.Unpin()
-
-	allowedSIDs := []*windows.SID{currentUserSID}
-	if !currentUserSID.Equals(localSystemSID) {
-		allowedSIDs = append(allowedSIDs, localSystemSID)
-	}
-	entries := make([]windows.EXPLICIT_ACCESS, len(allowedSIDs))
-	for index, sid := range allowedSIDs {
-		entries[index] = windows.EXPLICIT_ACCESS{
-			AccessPermissions: windows.GENERIC_ALL,
-			AccessMode:        windows.GRANT_ACCESS,
-			Inheritance:       windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT,
-			Trustee: windows.TRUSTEE{
-				TrusteeForm:  windows.TRUSTEE_IS_SID,
-				TrusteeType:  windows.TRUSTEE_IS_USER,
-				TrusteeValue: windows.TrusteeValueFromSID(sid),
-			},
-		}
-	}
-	acl, err := windows.ACLFromEntries(entries, nil)
-	runtime.KeepAlive(entries)
+	securityDescriptor, err := privateSecurityDescriptor(&pinner, windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT)
 	if err != nil {
 		return nil, err
 	}
-	pinner.Pin(acl)
-	securityDescriptor, err := windows.NewSecurityDescriptor()
-	if err != nil {
-		return nil, err
-	}
-	if err := securityDescriptor.SetDACL(acl, true, false); err != nil {
-		return nil, err
-	}
-	if err := securityDescriptor.SetControl(
-		windows.SE_DACL_PROTECTED,
-		windows.SE_DACL_PROTECTED,
-	); err != nil {
-		return nil, err
-	}
-	pinner.Pin(securityDescriptor)
 
 	parentDirectory, err := parent.Open(".")
 	if err != nil {

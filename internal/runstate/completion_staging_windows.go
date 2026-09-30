@@ -16,57 +16,12 @@ func createPrivateCompletionTempWithHooks(root *os.Root, name string, hooks comp
 	if err := validateRelativeName(name); err != nil {
 		return nil, nil, err
 	}
-	currentUser, err := windows.GetCurrentProcessToken().GetTokenUser()
-	if err != nil {
-		return nil, nil, err
-	}
-	currentUserSID, err := currentUser.User.Sid.Copy()
-	if err != nil {
-		return nil, nil, err
-	}
-	localSystemSID, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	var pinner runtime.Pinner
-	pinner.Pin(currentUserSID)
-	pinner.Pin(localSystemSID)
 	defer pinner.Unpin()
-
-	allowedSIDs := []*windows.SID{currentUserSID}
-	if !currentUserSID.Equals(localSystemSID) {
-		allowedSIDs = append(allowedSIDs, localSystemSID)
-	}
-	entries := make([]windows.EXPLICIT_ACCESS, len(allowedSIDs))
-	for index, sid := range allowedSIDs {
-		entries[index] = windows.EXPLICIT_ACCESS{
-			AccessPermissions: windows.GENERIC_ALL,
-			AccessMode:        windows.GRANT_ACCESS,
-			Trustee: windows.TRUSTEE{
-				TrusteeForm:  windows.TRUSTEE_IS_SID,
-				TrusteeType:  windows.TRUSTEE_IS_USER,
-				TrusteeValue: windows.TrusteeValueFromSID(sid),
-			},
-		}
-	}
-	acl, err := windows.ACLFromEntries(entries, nil)
-	runtime.KeepAlive(entries)
+	descriptor, err := privateSecurityDescriptor(&pinner, windows.NO_INHERITANCE)
 	if err != nil {
 		return nil, nil, err
 	}
-	pinner.Pin(acl)
-	descriptor, err := windows.NewSecurityDescriptor()
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := descriptor.SetDACL(acl, true, false); err != nil {
-		return nil, nil, err
-	}
-	if err := descriptor.SetControl(windows.SE_DACL_PROTECTED, windows.SE_DACL_PROTECTED); err != nil {
-		return nil, nil, err
-	}
-	pinner.Pin(descriptor)
 
 	directory, err := root.Open(".")
 	if err != nil {
