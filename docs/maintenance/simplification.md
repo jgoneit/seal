@@ -20,8 +20,8 @@ duplicate implementations, repeated work, and bounded over-design.
 
 | # | Task | Status | Pull request |
 |---|---|---|---|
-| 1 | CLI cleanup: list `run export` in the usage synopsis, drop the redundant informational-command branch, drop the unused Completion observation hook | done | simplify/01-cleanup |
-| 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | pending | |
+| 1 | CLI cleanup: list `run export` in the usage synopsis, drop the redundant informational-command branch, drop the unused Completion observation hook | done | [#26](https://github.com/jgoneit/seal/pull/26) |
+| 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | done | simplify/02-verify-root |
 | 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | pending | |
 | 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | pending | |
 | 5 | Fewer repeated Git subprocesses during source observation | pending | |

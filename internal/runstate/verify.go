@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jgoneit/seal/internal/checkrun"
+	"github.com/jgoneit/seal/internal/gitroot"
 	"github.com/jgoneit/seal/internal/sourceobs"
 )
 
@@ -64,11 +65,25 @@ type preparedVerification struct {
 	checks         []checkrun.Definition
 }
 
+// findVerifyRepositoryRoot resolves the worktree with Git, like task create,
+// so both commands agree on the Task location. The frozen Reference verify
+// also asks Git; only its read-only Run commands walk up to a .git marker.
+func findVerifyRepositoryRoot(cwd string) (string, error) {
+	root, err := gitroot.Find(cwd)
+	if errors.Is(err, gitroot.ErrGitUnavailable) {
+		return "", &RepositoryError{message: "Git is required to verify a task."}
+	}
+	if err != nil {
+		return "", &RepositoryError{message: "Task commands must run inside a Git repository."}
+	}
+	return root, nil
+}
+
 func prepareVerification(cwd, taskID string) (preparedVerification, error) {
 	if err := validateIdentity(taskID, "Task"); err != nil {
 		return preparedVerification{}, err
 	}
-	repository, err := findRepositoryRoot(cwd)
+	repository, err := findVerifyRepositoryRoot(cwd)
 	if err != nil {
 		return preparedVerification{}, err
 	}
