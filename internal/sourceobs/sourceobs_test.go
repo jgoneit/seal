@@ -200,49 +200,23 @@ func TestSnapshotIdentityIsIndependentOfGitLayer(t *testing.T) {
 	}
 }
 
-func TestBaselineCacheReusesOnlyImmutableBaselineData(t *testing.T) {
+func TestEachSnapshotRereadsBaselineObjects(t *testing.T) {
 	repository, baseline := basicFixture(t)
-	repository.write("src/other.txt", []byte("other\n"), 0o644)
-	baseline = repository.commit("second baseline")
-	trace := filepath.Join(t.TempDir(), "trace")
-	t.Setenv("GIT_TRACE", trace)
-	gitCalls := func(command string) int {
-		contents, err := os.ReadFile(trace)
-		if err != nil && !os.IsNotExist(err) {
-			t.Fatal(err)
-		}
-		return strings.Count(string(contents), " "+command+" ")
+	if _, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline}); err != nil {
+		t.Fatalf("ObserveSnapshot(before) error = %v", err)
 	}
-
-	request := SnapshotRequest{CWD: repository.root, Baseline: baseline, Cache: NewBaselineCache()}
-	first, err := ObserveSnapshot(request)
-	if err != nil {
-		t.Fatalf("ObserveSnapshot(first) error = %v", err)
+	// A check may remove a baseline blob while leaving the worktree unchanged;
+	// the next snapshot must fail rather than reuse the earlier identity.
+	blob := strings.TrimSpace(repository.git("rev-parse", baseline+":src/base.txt"))
+	object := filepath.Join(repository.root, ".git", "objects", blob[:2], blob[2:])
+	if err := os.Chmod(object, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	treeReads, blobReads, indexReads := gitCalls("ls-tree"), gitCalls("cat-file"), gitCalls("ls-files")
-	if treeReads != 1 || blobReads != 2 {
-		t.Fatalf("first snapshot read %d trees and %d blobs, want 1 and 2", treeReads, blobReads)
+	if err := os.Remove(object); err != nil {
+		t.Fatal(err)
 	}
-
-	repository.write("src/base.txt", []byte("changed\n"), 0o644)
-	second, err := ObserveSnapshot(request)
-	if err != nil {
-		t.Fatalf("ObserveSnapshot(second) error = %v", err)
-	}
-	if gitCalls("ls-tree") != treeReads || gitCalls("cat-file") != blobReads {
-		t.Fatal("second snapshot re-read immutable baseline data")
-	}
-	if gitCalls("ls-files") <= indexReads {
-		t.Fatal("second snapshot did not observe the index again")
-	}
-	uncached, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
-	if err != nil {
-		t.Fatalf("ObserveSnapshot(uncached) error = %v", err)
-	}
-	if second.SnapshotSHA256() != uncached.SnapshotSHA256() || second.SnapshotSHA256() == first.SnapshotSHA256() {
-		t.Fatalf("cached snapshot = %s, uncached = %s, first = %s",
-			second.SnapshotSHA256(), uncached.SnapshotSHA256(), first.SnapshotSHA256())
-	}
+	_, err := ObserveSnapshot(SnapshotRequest{CWD: repository.root, Baseline: baseline})
+	assertErrorKind(t, err, RepositoryState, "baseline blob")
 }
 
 func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
@@ -251,10 +225,11 @@ func TestSnapshotObservationIgnoresConcurrentSealMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	baselineBlobs, err := (*BaselineCache)(nil).load(context.Background(), &repositoryContext)
+	repositoryContext.baselineEntries, err = readBaselineTree(context.Background(), repository.root, baseline)
 	if err != nil {
 		t.Fatal(err)
 	}
+	baselineBlobs := make(map[string]blobIdentity)
 	before, err := collectSnapshotObservation(context.Background(), repositoryContext, baselineBlobs)
 	if err != nil {
 		t.Fatal(err)

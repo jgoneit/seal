@@ -1,0 +1,15 @@
+{
+  "name": "seal",
+  "description": "Seal Plugin for evidence-backed Acceptance of Native Coding Agent work.",
+  "owner": {
+    "name": "Jaegon Seo",
+    "url": "https://github.com/jgoneit"
+  },
+  "plugins": [
+    {
+      "name": "seal",
+      "source": "./",
+      "description": "Evidence-backed Acceptance for Native Coding Agent work."
+    }
+  ]
+}
