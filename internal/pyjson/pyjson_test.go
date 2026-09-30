@@ -97,6 +97,44 @@ func TestDecodeClassifiesPythonFailures(t *testing.T) {
 	}
 }
 
+func TestDecodeReportsTheFirstFailureInDocumentOrder(t *testing.T) {
+	oversized := strings.Repeat("9", IntegerDigitLimit+1)
+	isLimit := func(err error) bool {
+		var limit *IntegerLimitError
+		return errors.As(err, &limit)
+	}
+	isConstantKey := func(err error) bool { return errors.Is(err, errConstantKey) }
+	tests := []struct {
+		name  string
+		input string
+		check func(error) bool
+	}{
+		{"integer before key", `{"a": ` + oversized + `, "b": 1, NaN: 1}`, isLimit},
+		{"key before integer", `{"b": 1, Infinity : 1, "a": ` + oversized + `}`, isConstantKey},
+		{"nested integer before key", `[{"a": [` + oversized + `]}, {"c": 1, -Infinity: 2}]`, isLimit},
+		{"nested key before integer", `[{"c": 1, NaN: 2}, {"a": ` + oversized + `}]`, isConstantKey},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Map iteration order varies between runs, so repeat the decode.
+			for attempt := 0; attempt < 100; attempt++ {
+				if _, err := Decode([]byte(test.input)); !test.check(err) {
+					t.Fatalf("Decode() attempt %d error = %v", attempt, err)
+				}
+			}
+		})
+	}
+
+	value, err := Decode([]byte(`{"\u0000fNaN": NaN, "a\"\u0000fNaN": 1}`))
+	if err != nil {
+		t.Fatalf("Decode(marker-like string keys) error = %v", err)
+	}
+	object := value.(map[string]any)
+	if _, ok := object["\x00fNaN"].(NaN); !ok || object["a\"\x00fNaN"] == nil {
+		t.Fatalf("Decode(marker-like string keys) = %#v", value)
+	}
+}
+
 func TestEqualUsesPythonNumberSemantics(t *testing.T) {
 	left, _ := Decode([]byte(`[1, 1.0, true, NaN, {"a": 2}]`))
 	right, _ := Decode([]byte(`[1.0, true, 1, NaN, {"a": 2.0}]`))
