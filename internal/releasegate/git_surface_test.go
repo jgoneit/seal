@@ -90,6 +90,7 @@ func TestValidateReleaseRejectsRCVersionMismatch(t *testing.T) {
 			name: "Core version",
 			mutate: func(t *testing.T, fixture releaseFixture) {
 				writeTestFile(t, fixture.root, ".codex-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \"1.2.3-rc.5+codex.test\",\n  \"description\": \"test\"\n}\n")
+				writeClaudeManifest(t, fixture.root, "1.2.3-rc.5")
 			},
 			want: "version constant \"1.2.3-rc.4\" does not match tag version \"1.2.3-rc.5\"",
 		},
@@ -97,8 +98,17 @@ func TestValidateReleaseRejectsRCVersionMismatch(t *testing.T) {
 			name: "Plugin version",
 			mutate: func(t *testing.T, fixture releaseFixture) {
 				writeTestFile(t, fixture.root, "cmd/seal/main.go", "package main\n\nconst version = \"1.2.3-rc.5\"\n\nfunc main() {}\n")
+				writeClaudeManifest(t, fixture.root, "1.2.3-rc.5")
 			},
 			want: "plugin version \"1.2.3-rc.4+codex.test\" does not match tag version \"1.2.3-rc.5\"",
+		},
+		{
+			name: "Claude Plugin version",
+			mutate: func(t *testing.T, fixture releaseFixture) {
+				writeTestFile(t, fixture.root, "cmd/seal/main.go", "package main\n\nconst version = \"1.2.3-rc.5\"\n\nfunc main() {}\n")
+				writeTestFile(t, fixture.root, ".codex-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \"1.2.3-rc.5+codex.test\",\n  \"description\": \"test\"\n}\n")
+			},
+			want: "normalize .claude-plugin/plugin.json: plugin version \"1.2.3-rc.4+claude.test\" does not match tag version \"1.2.3-rc.5\"",
 		},
 	}
 	for _, test := range tests {
@@ -127,6 +137,7 @@ func TestValidateReleaseRequiresCanonicalVersionFiles(t *testing.T) {
 			remove: "cmd/seal/main.go",
 			updatePeer: func(t *testing.T, fixture releaseFixture) {
 				writeTestFile(t, fixture.root, ".codex-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \"1.2.3-rc.5+codex.test\",\n  \"description\": \"test\"\n}\n")
+				writeClaudeManifest(t, fixture.root, "1.2.3-rc.5")
 			},
 		},
 		{
@@ -134,6 +145,7 @@ func TestValidateReleaseRequiresCanonicalVersionFiles(t *testing.T) {
 			remove: ".codex-plugin/plugin.json",
 			updatePeer: func(t *testing.T, fixture releaseFixture) {
 				writeTestFile(t, fixture.root, "cmd/seal/main.go", "package main\n\nconst version = \"1.2.3-rc.5\"\n\nfunc main() {}\n")
+				writeClaudeManifest(t, fixture.root, "1.2.3-rc.5")
 			},
 		},
 	}
@@ -153,6 +165,22 @@ func TestValidateReleaseRequiresCanonicalVersionFiles(t *testing.T) {
 				t.Fatalf("ValidateRelease() error = %v, want missing canonical file %s", err, test.remove)
 			}
 		})
+	}
+}
+
+func TestValidateReleaseAllowsCandidateWithoutClaudePlugin(t *testing.T) {
+	fixture := newReleaseFixture(t)
+	if err := os.Remove(filepath.Join(fixture.root, ".claude-plugin", "plugin.json")); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, fixture.root, "cmd/seal/main.go", "package main\n\nconst version = \"1.2.3-rc.5\"\n\nfunc main() {}\n")
+	writeTestFile(t, fixture.root, ".codex-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \"1.2.3-rc.5+codex.test\",\n  \"description\": \"test\"\n}\n")
+	fixture.git(t, "add", "--all")
+	fixture.git(t, "commit", "-q", "-m", "candidate without Claude Plugin")
+	fixture.git(t, "tag", "-a", "v1.2.3-rc.5", "-m", "candidate without Claude Plugin")
+
+	if _, err := ValidateRelease(testContext(t), fixture.root, "v1.2.3-rc.5", "release/acceptance"); err != nil {
+		t.Fatalf("ValidateRelease() error = %v", err)
 	}
 }
 
@@ -369,6 +397,7 @@ func TestValidateStableReleaseRejectsHigherSameBaseRCOnNonAncestorBranch(t *test
 	fixture.git(t, "switch", "--quiet", "--detach", fixture.commit)
 	writeTestFile(t, fixture.root, "cmd/seal/main.go", "package main\n\nconst version = \"1.2.3-rc.5\"\n\nfunc main() {}\n")
 	writeTestFile(t, fixture.root, ".codex-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \"1.2.3-rc.5+codex.test\",\n  \"description\": \"test\"\n}\n")
+	writeClaudeManifest(t, fixture.root, "1.2.3-rc.5")
 	writeTestFile(t, fixture.root, "internal/nonancestor.txt", "newer divergent candidate\n")
 	fixture.git(t, "add", "--all")
 	fixture.git(t, "commit", "-q", "-m", "divergent candidate")
@@ -406,6 +435,7 @@ func newReleaseFixture(t *testing.T) releaseFixture {
 	fixture.git(t, "config", "core.autocrlf", "false")
 	writeTestFile(t, root, "cmd/seal/main.go", "package main\n\nconst version = \"1.2.3-rc.4\"\n\nfunc main() {}\n")
 	writeTestFile(t, root, ".codex-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \"1.2.3-rc.4+codex.test\",\n  \"description\": \"test\"\n}\n")
+	writeClaudeManifest(t, root, "1.2.3-rc.4")
 	writeTestFile(t, root, "release/acceptance/report-v1.schema.json", "{}\n")
 	writeTestFile(t, root, "release/acceptance/README.md", "acceptance report instructions\n")
 	writeTestFile(t, root, "skills/seal/SKILL.md", "candidate Skill behavior\n")
@@ -417,6 +447,11 @@ func newReleaseFixture(t *testing.T) releaseFixture {
 	fixture.commit = fixture.git(t, "rev-parse", testRCTag+"^{commit}")
 	fixture.tagTime = fixture.parsedTagTime(t, testRCTag)
 	return fixture
+}
+
+func writeClaudeManifest(t *testing.T, root, version string) {
+	t.Helper()
+	writeTestFile(t, root, ".claude-plugin/plugin.json", "{\n  \"name\": \"seal\",\n  \"version\": \""+version+"+claude.test\"\n}\n")
 }
 
 func (fixture releaseFixture) writeCompleteReport(t *testing.T, started time.Time, taskCount int) {
@@ -452,6 +487,7 @@ func (fixture releaseFixture) prepareStableWithIndexMutation(
 		manifest = "{\"description\":\"test\",\"version\":\"1.2.3+codex.test\",\"name\":\"seal\"}\n"
 	}
 	writeTestFile(t, fixture.root, ".codex-plugin/plugin.json", manifest)
+	writeClaudeManifest(t, fixture.root, "1.2.3")
 	writeTestFile(t, fixture.root, "README.md", "stable overview may change\n")
 	writeTestFile(t, fixture.root, ".gitignore", "local-only\n")
 	writeTestFile(t, fixture.root, "RELEASING.md", "stable operational instructions\n")
