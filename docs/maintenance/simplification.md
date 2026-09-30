@@ -89,9 +89,12 @@ detected, and its regression scenario was removed.
 
 [`go-canonical-transition-proposal.md`](go-canonical-transition-proposal.md)
 recommends transferring behavioral authority to Go while keeping every stored
-schema byte-for-byte: existing Evidence can only be re-validated by the Python
-canonical encoding, so most parity code is permanent while old stores must
-remain valid. No code changes until the charter records a decision.
+schema byte-for-byte. Existing stores stay valid only with three independent
+parts of `pyjson`: digest encoding for the string/integer manifest and Source
+Snapshot payloads, Python-compatible decoding (for example valid `NaN`
+durations), and Python equality between stored values. Most parity code is
+therefore permanent while old stores must remain valid. No code changes until
+the charter records a decision.
 
 ## Follow-ups not scheduled
 

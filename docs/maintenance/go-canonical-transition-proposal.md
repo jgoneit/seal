@@ -127,8 +127,17 @@ Drop Python parity and declare earlier stores unsupported.
   hash and size corruption, missing Evidence, Scope, symlinks) must stay as
   Go-owned scenarios, so the saving is smaller than the corpus size.
 - Existing Tasks, Runs, and Completions in the affected rows above stop
-  validating or change outcome; exact lookup
-  and Completion from those states are lost. Because affected stores cannot be
+  validating or change outcome. Beyond exact lookup and Completion, `verify`
+  reads the saved Task first and can no longer produce a Run for an affected
+  Task. `run export` reports affected Tasks as `invalid_task` and excludes
+  affected Runs as `invalid_evidence`, so every export of that store exits 8
+  for periodic consumers.
+- New invocations change too, unless the mappings are kept independently of
+  old-store support: `task-create-contract.md` requires exit 1 for invalid
+  UTF-8 Task or catalog input and for over-limit integer tokens, which would
+  otherwise become ordinary invalid input or be accepted after replacement
+  decoding.
+- Because affected stores cannot be
   identified in advance, this contradicts the current migration invariants and
   the RC acceptance history.
 
@@ -141,10 +150,13 @@ Do not choose C while any user depends on existing `.seal` state.
 
 1. Record the transition in `MIGRATION_CHARTER.md` (scope: behavioral authority,
    not schema) and update `REFERENCE.md` to mark Python as historical. Update
-   every other authority declaration in the same change: the headers of
+   every other statement that names Python as the behavioral authority or
+   reference in the same change, found by a repository-wide search rather than
+   a fixed list. Today these include the headers of
    `conformance/read-only-contract.md`, `conformance/task-create-contract.md`,
-   and `conformance/verify-contract.md`, and the Reference paragraph in
-   `README.md`.
+   and `conformance/verify-contract.md`; the "Approved divergences" paragraph
+   of `read-only-contract.md`; the authority statements in
+   `MIGRATION_CHARTER.md`; and the Reference paragraph in `README.md`.
 2. Update `AGENTS.md` migration rules that require Reference justification.
 3. Re-home the corpus as Go golden tests; keep fixture provenance in
    `conformance/README.md`.
@@ -167,5 +179,8 @@ Do not choose C while any user depends on existing `.seal` state.
   identical bytes. Key-order or whitespace changes would still pass.
 - Byte identity is established only by the raw goldens from step 6, plus the
   existing `stdout_raw_hex` cases.
-- Runs created before the transition, both Go- and Python-written, still pass
-  `run show` and `complete` in a regression scenario.
+- Representative Runs created before the transition, both Go- and
+  Python-written, keep their current `run show` and `complete` outcomes in a
+  regression scenario, including exit 7 for a Task with `verifier.required`
+  and exit 9 when current source differs from S1. Successful `complete` is
+  required only for eligible Basic Runs with matching source.
