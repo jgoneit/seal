@@ -312,6 +312,9 @@ func (git gitRepository) surfaceDigest(ctx context.Context, commit, expectedVers
 		case ".codex-plugin/plugin.json":
 			pluginVersionSeen = true
 			contents, err = normalizePluginVersion(contents, expectedVersion)
+		case ".claude-plugin/plugin.json":
+			// Optional so earlier candidates without it keep a computable surface.
+			contents, err = normalizePluginVersion(contents, expectedVersion)
 		}
 		if err != nil {
 			return "", fmt.Errorf("normalize %s: %w", record.path, err)
