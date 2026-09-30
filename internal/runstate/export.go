@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 const exportEntryLimit = 10_000
@@ -466,7 +468,7 @@ func (report *ExportReport) projectRun(run *ValidatedRun) ExportRun {
 		report.issue("invalid_metric", run.taskID, run.runID)
 	}
 	for index, check := range run.checks {
-		required := jsonEqual(check.Required, true)
+		required := pyjson.Equal(check.Required, true)
 		duration := finiteDuration(run.checkDurations[index])
 		if duration == nil {
 			report.issue("invalid_metric", run.taskID, run.runID)
@@ -512,7 +514,7 @@ func finiteDuration(value any) *float64 {
 			return nil
 		}
 		duration = parsed
-	case pythonFloat:
+	case pyjson.Float:
 		duration = float64(number)
 	default:
 		return nil

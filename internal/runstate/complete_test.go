@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 var completionTestTime = time.Date(2026, 8, 16, 7, 8, 9, 123456000, time.UTC)
@@ -124,7 +126,7 @@ func TestCompleteWritesImmutableV2AndRechecksCurrentEligibility(t *testing.T) {
 		"final_result":           "pass",
 		"completed_at":           completionTestTime.Format(completionTimestamp),
 	}
-	if !jsonEqual(record, want) {
+	if !pyjson.Equal(record, want) {
 		t.Fatalf("completion.json = %#v, want %#v", record, want)
 	}
 	if runtime.GOOS != "windows" {

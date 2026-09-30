@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jgoneit/seal/internal/pyjson"
 	"github.com/jgoneit/seal/internal/sourceobs"
 )
 
@@ -27,11 +28,11 @@ type CompletionRun struct {
 
 // ReferenceJSON returns the deterministic legacy completion success object.
 func (run CompletionRun) ReferenceJSON() ([]byte, error) {
-	encoded, err := prettyCanonicalJSONMode(map[string]any{
+	encoded, err := pyjson.Encode(map[string]any{
 		"completion_path": run.CompletionPath,
 		"run_id":          run.RunID,
 		"task_id":         run.TaskID,
-	}, false, false)
+	}, pyjson.Options{Indent: true})
 	if err != nil {
 		return nil, err
 	}

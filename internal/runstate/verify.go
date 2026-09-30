@@ -13,6 +13,7 @@ import (
 
 	"github.com/jgoneit/seal/internal/checkrun"
 	"github.com/jgoneit/seal/internal/gitroot"
+	"github.com/jgoneit/seal/internal/pyjson"
 	"github.com/jgoneit/seal/internal/sourceobs"
 )
 
@@ -29,10 +30,10 @@ type VerificationRun struct {
 
 // ReferenceJSON returns the deterministic public verify result.
 func (run VerificationRun) ReferenceJSON() ([]byte, error) {
-	encoded, err := prettyCanonicalJSONMode(map[string]any{
+	encoded, err := pyjson.Encode(map[string]any{
 		"evidence_path": run.EvidencePath,
 		"run_id":        run.RunID,
-	}, false, false)
+	}, pyjson.Options{Indent: true})
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +351,7 @@ func checkResultDocument(result checkrun.Result) map[string]any {
 		"cwd":               result.CWD,
 		"started_at":        result.StartedAt,
 		"finished_at":       result.FinishedAt,
-		"duration_seconds":  pythonFloat(result.DurationSeconds),
+		"duration_seconds":  pyjson.Float(result.DurationSeconds),
 		"effective_timeout": json.Number(result.EffectiveTimeout.String()),
 		"exit_code":         exitCode,
 		"timed_out":         result.TimedOut,
@@ -395,7 +396,7 @@ func renderVerificationDocument(input verificationInput) ([]byte, error) {
 		"mechanical_result":              input.MechanicalResult,
 		"evidence_files":                 stringSliceValues(input.EvidenceFiles),
 		"timestamp":                      input.Timestamp,
-		"duration":                       pythonFloat(input.Duration),
+		"duration":                       pyjson.Float(input.Duration),
 	})
 }
 
@@ -454,7 +455,7 @@ func requiredChecksPassed(results []checkrun.Result) bool {
 }
 
 func renderEvidenceJSON(value any) ([]byte, error) {
-	encoded, err := prettyCanonicalJSONMode(value, false, false)
+	encoded, err := pyjson.Encode(value, pyjson.Options{Indent: true})
 	if err != nil {
 		return nil, err
 	}

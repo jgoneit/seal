@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 const (
@@ -514,7 +516,7 @@ func TestPythonCompatibleCanonicalJSONVectors(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			encoded, err := canonicalJSON(test.value, test.asciiOnly)
+			encoded, err := pyjson.Encode(test.value, pyjson.Options{ASCII: test.asciiOnly})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -595,7 +597,7 @@ func TestEscapedLoneSurrogateRemainsValidAndLossless(t *testing.T) {
 		t.Fatalf("decodeJSONObject() error = %v", err)
 	}
 	path := decoded["path"].(string)
-	encoded, err := canonicalJSON(map[string]any{"path": path}, true)
+	encoded, err := pyjson.Encode(map[string]any{"path": path}, pyjson.Options{ASCII: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,8 +716,8 @@ func TestRepositoryAndSourcePathColonAsymmetry(t *testing.T) {
 }
 
 func TestPythonIntegerDigitLimitParity(t *testing.T) {
-	limit := strings.Repeat("9", pythonIntegerDigitLimit)
-	overLimit := strings.Repeat("9", pythonIntegerDigitLimit+1)
+	limit := strings.Repeat("9", pyjson.IntegerDigitLimit)
+	overLimit := strings.Repeat("9", pyjson.IntegerDigitLimit+1)
 
 	t.Run("decoder boundary", func(t *testing.T) {
 		tests := []struct {
@@ -791,7 +793,7 @@ func TestPythonIntegerDigitLimitParity(t *testing.T) {
 }
 
 func TestPythonIntegerLimitPrecedesLaterJSONSyntaxFailure(t *testing.T) {
-	overLimit := strings.Repeat("9", pythonIntegerDigitLimit+1)
+	overLimit := strings.Repeat("9", pyjson.IntegerDigitLimit+1)
 	directTests := []struct {
 		name        string
 		contents    string
@@ -950,7 +952,7 @@ func TestRunJSONDepthLimitClassification(t *testing.T) {
 
 	t.Run("stdlib depth failure remains internally classifiable", func(t *testing.T) {
 		_, err := decodeJSONObject([]byte(`{"value":` + depth10000 + `}`))
-		if err == nil || !isStandardJSONDepthLimit(err) {
+		if err == nil || !pyjson.IsDepthLimit(err) {
 			t.Fatalf("decodeJSONObject() error = %v, want standard-library depth limit", err)
 		}
 		if KindOf(err) != KindUnknown {
@@ -1068,7 +1070,7 @@ func newRunFixture(t *testing.T, options fixtureOptions) runFixture {
 func sourceDocument(t *testing.T, baseline string, entries []any) map[string]any {
 	t.Helper()
 	payload := map[string]any{"schema_version": json.Number("1"), "baseline": baseline, "entries": entries}
-	canonical, err := canonicalJSON(payload, true)
+	canonical, err := pyjson.Encode(payload, pyjson.Options{ASCII: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1089,7 +1091,7 @@ func writeManifest(t *testing.T, runPath, taskID, runID string, files []string) 
 		records[index] = map[string]any{"path": path, "size_bytes": len(contents), "sha256": hex.EncodeToString(digest[:])}
 	}
 	payload := map[string]any{"schema_version": json.Number("1"), "task_id": taskID, "run_id": runID, "files": records}
-	canonical, err := canonicalJSON(payload, false)
+	canonical, err := pyjson.Encode(payload, pyjson.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1129,7 +1131,7 @@ func writeTestCanonicalJSON(t *testing.T, path string, value any, asciiOnly bool
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	contents, err := canonicalJSON(value, asciiOnly)
+	contents, err := pyjson.Encode(value, pyjson.Options{ASCII: asciiOnly})
 	if err != nil {
 		t.Fatal(err)
 	}

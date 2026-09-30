@@ -2,6 +2,7 @@ package taskstate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 const taskSchemaVersion = 1
@@ -101,12 +104,19 @@ func loadCreateJSONObject(path, context string) (map[string]any, error) {
 		return nil, encodingFailure(fmt.Sprintf("%s is not valid UTF-8.", context), nil)
 	}
 
-	normalized, markers := replacePythonConstants(contents)
-	value, err := decodeJSONValue(normalized)
-	if err != nil {
+	// Task creation reports a syntax error before an earlier oversized integer
+	// and classifies nesting depth as invalid input; see
+	// docs/maintenance/simplification.md before aligning either with show.
+	value, err := pyjson.Decode(contents)
+	var limit *pyjson.IntegerLimitError
+	if errors.As(err, &limit) && limit.Syntax != nil {
+		err = limit.Syntax
+		limit = nil
+	}
+	if err != nil && limit == nil {
 		return nil, invalidInput(fmt.Sprintf("%s is not valid JSON: %v.", context, err), err)
 	}
-	if containsOversizedPythonInteger(normalized) {
+	if limit != nil {
 		return nil, numericFailure(
 			fmt.Sprintf("%s contains a JSON integer exceeding the supported 4300-digit limit.", context),
 			nil,
@@ -119,7 +129,7 @@ func loadCreateJSONObject(path, context string) (map[string]any, error) {
 		)
 	}
 
-	object, ok := restorePythonConstants(value, markers).(map[string]any)
+	object, ok := value.(map[string]any)
 	if !ok {
 		return nil, invalidInput(fmt.Sprintf("%s must be a JSON object.", context), nil)
 	}
@@ -590,4 +600,17 @@ func decodeHexQuad(value []byte) (uint16, bool) {
 		result = result<<4 | uint16(digit)
 	}
 	return result, true
+}
+
+func hexadecimalDigit(character byte) (byte, bool) {
+	switch {
+	case character >= '0' && character <= '9':
+		return character - '0', true
+	case character >= 'a' && character <= 'f':
+		return character - 'a' + 10, true
+	case character >= 'A' && character <= 'F':
+		return character - 'A' + 10, true
+	default:
+		return 0, false
+	}
 }

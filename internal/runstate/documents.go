@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 var requiredEvidenceFiles = []string{
@@ -174,7 +176,7 @@ func validateDocumentsContext(ctx context.Context, runDirectory string, task jso
 	if err := validateTaskSnapshot(evidenceTask, taskID, "task.json"); err != nil {
 		return validatedDocuments{}, err
 	}
-	if !jsonEqual(map[string]any(evidenceTask), map[string]any(task)) {
+	if !pyjson.Equal(map[string]any(evidenceTask), map[string]any(task)) {
 		return validatedDocuments{}, &IdentityError{message: fmt.Sprintf(
 			"task.json does not match saved Task snapshot '%s'.",
 			taskID,
@@ -221,7 +223,7 @@ func validateDocumentsContext(ctx context.Context, runDirectory string, task jso
 	if changed.scopePass && requiredChecksPass && sourceStable {
 		mechanicalResult = "pass"
 	}
-	if !jsonEqual(verification.document["required_checks_pass"], requiredChecksPass) {
+	if !pyjson.Equal(verification.document["required_checks_pass"], requiredChecksPass) {
 		return validatedDocuments{}, &EvidenceError{message: "verification.json required_checks_pass does not match checks.json."}
 	}
 	if verification.document["mechanical_result"] != mechanicalResult {
@@ -262,7 +264,7 @@ func readEvidenceJSONContext(ctx context.Context, runDirectory, relativePath str
 	}
 	value, err := decodeJSONObject(contents)
 	if err != nil {
-		if relativePath == "task.json" && isStandardJSONDepthLimit(err) {
+		if relativePath == "task.json" && pyjson.IsDepthLimit(err) {
 			return nil, &RuntimeError{message: "Evidence file 'task.json' exceeds the supported JSON nesting depth."}
 		}
 		if KindOf(err) == KindRuntime {
@@ -396,7 +398,7 @@ func validateChecks(
 			return nil, false, nil, &EvidenceError{message: context + " has missing or unexpected field(s)."}
 		}
 		for _, field := range []string{"name", "argv", "required"} {
-			if !jsonEqual(record[field], task.checks[index].raw[field]) {
+			if !pyjson.Equal(record[field], task.checks[index].raw[field]) {
 				return nil, false, nil, &EvidenceError{message: fmt.Sprintf("%s.%s does not match saved Task check[%d].%s.", context, field, index, field)}
 			}
 		}
@@ -408,7 +410,7 @@ func validateChecks(
 		if !nonNegativeNumber(record["duration_seconds"]) {
 			return nil, false, nil, &EvidenceError{message: context + ".duration_seconds must be a non-negative number."}
 		}
-		if !jsonEqual(record["effective_timeout"], task.checks[index].timeout) {
+		if !pyjson.Equal(record["effective_timeout"], task.checks[index].timeout) {
 			return nil, false, nil, &EvidenceError{message: fmt.Sprintf("%s.effective_timeout does not match saved Task check[%d].", context, index)}
 		}
 		passed, passedOK := record["passed"].(bool)
@@ -421,7 +423,7 @@ func validateChecks(
 		}
 		var exitCode *json.Number
 		if record["exit_code"] != nil {
-			number, ok := isJSONInteger(record["exit_code"])
+			number, ok := pyjson.Integer(record["exit_code"])
 			if !ok {
 				return nil, false, nil, &EvidenceError{message: context + ".exit_code must be an integer or null."}
 			}
@@ -454,7 +456,7 @@ func validateChecks(
 			ExitCode: exitCode,
 			Name:     name,
 			Passed:   passed,
-			Required: cloneJSON(record["required"]),
+			Required: pyjson.Clone(record["required"]),
 			TimedOut: timedOut,
 		}
 		if task.checks[index].required && !passed {
@@ -522,14 +524,14 @@ func validateChangedFiles(task taskFacts, document, verification jsonObject) (ch
 			projected = append(projected, projection)
 		}
 	}
-	if !jsonEqual(verification["changed_files"], productChanges) {
+	if !pyjson.Equal(verification["changed_files"], productChanges) {
 		return changedFacts{}, &EvidenceError{message: "verification.json changed_files does not match product changes in changed-files.json."}
 	}
-	if !jsonEqual(verification["scope_violations"], violations) {
+	if !pyjson.Equal(verification["scope_violations"], violations) {
 		return changedFacts{}, &EvidenceError{message: "verification.json scope_violations does not match out-of-scope product changes."}
 	}
 	scopePass := len(violations) == 0
-	if !jsonEqual(verification["scope_pass"], scopePass) {
+	if !pyjson.Equal(verification["scope_pass"], scopePass) {
 		return changedFacts{}, &EvidenceError{message: "verification.json scope_pass does not match scope_violations."}
 	}
 	return changedFacts{

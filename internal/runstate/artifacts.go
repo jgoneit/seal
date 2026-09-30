@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 func safeRunPath(value any, context string) (string, error) {
@@ -106,7 +108,7 @@ func surrogateEscapeFilesystemPath(logical string) (string, error) {
 	var output strings.Builder
 	output.Grow(len(logical))
 	for index := 0; index < len(logical); {
-		if unit, width, ok := encodedSurrogate(logical[index:]); ok {
+		if unit, width, ok := pyjson.LoneSurrogate(logical[index:]); ok {
 			if unit < 0xdc80 || unit > 0xdcff {
 				return "", fmt.Errorf("unsupported lone surrogate")
 			}

@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jgoneit/seal/internal/pyjson"
 )
 
 const (
@@ -129,7 +131,7 @@ type ScopeViolation struct {
 // ReferenceJSON returns the exact byte-oriented JSON projection used by the
 // frozen POSIX reference, including surrogateescape bytes in Git paths.
 func (summary Summary) ReferenceJSON() ([]byte, error) {
-	return prettyCanonicalJSONMode(summary.document(), false, true)
+	return pyjson.Encode(summary.document(), pyjson.Options{Indent: true, RawSurrogateBytes: true})
 }
 
 func (summary Summary) document() map[string]any {
@@ -204,7 +206,7 @@ func cloneCheck(value Check) Check {
 		exitCode := *value.ExitCode
 		cloned.ExitCode = &exitCode
 	}
-	cloned.Required = cloneJSON(value.Required)
+	cloned.Required = pyjson.Clone(value.Required)
 	return cloned
 }
 
@@ -397,7 +399,7 @@ func readSavedTask(repository, taskID string) (jsonObject, error) {
 	}
 	value, err := decodeJSONObject(contents)
 	if err != nil {
-		if isStandardJSONDepthLimit(err) {
+		if pyjson.IsDepthLimit(err) {
 			return nil, &RuntimeError{message: fmt.Sprintf(
 				"Saved Task snapshot '%s' exceeds the supported JSON nesting depth.",
 				taskID,
