@@ -49,20 +49,27 @@ Validating an existing store needs three separate things from `pyjson`:
 1. **Digest encoding.** `evidence_sha256` (manifest records) and the Source
    Snapshot digest are recomputed over canonical JSON. Both payloads hold only
    strings and integers, so old-store validation needs the encoder's key order,
-   separators, and ASCII escapes, but not Python float `repr`.
+   separators, ASCII escapes, and integer normalization (a stored `-0` size is
+   recomputed as `0`), but not Python float `repr`.
 2. **Decoding.** Run validation decodes the saved Task and every Evidence
    document. Those documents may contain Python-only tokens (valid Runs can hold
    `NaN` in `verification.json` `duration` or `checks.json` `duration_seconds`),
-   lone-surrogate escapes, or bytes the explicit UTF-8 guard classifies.
-3. **Python equality.** The saved Task is compared with Evidence `task.json`
-   through `pyjson.Equal`, where `true == 1` and `1 == 1.0`. Neither copy is
-   re-encoded; the manifest hashes the Evidence file's raw bytes.
+   lone-surrogate escapes, integers of any length, or bytes the explicit UTF-8
+   guard classifies.
+3. **Python equality.** `pyjson.Equal` (`true == 1`, `1 == 1.0`) decides the
+   saved-Task versus Evidence `task.json` comparison and the Evidence checks for
+   check records (including `effective_timeout`), `required_checks_pass`,
+   changed files, Scope results, and Source Snapshot stability. Documents are
+   compared, not re-encoded; the manifest hashes their raw bytes.
 
 Task rendering (`task show`) and the bytes of newly written documents are not
 old-store requirements. Keeping them stable is a policy choice within option A.
 
-Replacing `pyjson` with `encoding/json` defaults would affect existing stores
-as follows:
+The examples below assume `pyjson` is replaced by `encoding/json` with
+`Decoder.UseNumber` and Go `==`/`reflect.DeepEqual` comparisons. The default
+`float64` decoding would change more (for example, it rejects a 4,301-digit
+integer and loses integer spelling). The list is illustrative, not exhaustive;
+see required step 7.
 
 | Stored content | Outcome |
 |---|---|
@@ -70,9 +77,10 @@ as follows:
 | `NaN`/`Infinity` token in Run documents, including today's valid `NaN` durations | Evidence decode fails, exit 8 |
 | Lone-surrogate escape such as `\udcff` | not rejected: replaced with U+FFFD. Matching saved and Evidence copies can still compare equal, so the Run stays valid, but `task show` bytes change (see `task_surrogateescape_dcff`) |
 | Invalid raw UTF-8 | replaced with U+FFFD instead of today's exit 1 unless the explicit guard is kept |
-| Saved Task and Evidence values equal only under Python equality (`true`/`1`, `1`/`1.0`) | Task mismatch, exit 2 |
-| Integer longer than 4,300 digits | today exit 1; would be accepted (exit 0) |
-| Manifest and Source Snapshot digest payloads | stay valid if the encoder keeps key order, separators, and ASCII escapes |
+| Saved Task and Evidence `task.json` equal only under Python equality | Task mismatch, exit 2 |
+| Evidence document equal to its expected value only under Python equality (such as `effective_timeout: 300.0` for a Task timeout of `300`) | Evidence error, exit 8 |
+| Integer longer than 4,300 digits | today exit 1; accepted (exit 0) |
+| Manifest or Source Snapshot record with a non-normal integer such as `-0` | digest mismatch, exit 8, unless the encoder normalizes integers |
 | Ordinary floats rendered with Python `repr` | no effect on validation; changes only new bytes and `task show`/`run show` output |
 
 Seal has no migration tool and the charter forbids automatic repair, and it
@@ -98,9 +106,11 @@ Go becomes the behavioral authority; Python remains a historical record.
 
 ### B. New schema versions for new writes
 
-Additionally introduce Task schema v2 and Evidence schema v3 written with plain
-RFC 8259 JSON (no NaN/Infinity, no lone surrogates, no Python float `repr`),
-while keeping v1/v2 readers.
+Additionally introduce Task schema v2 and Evidence schema v3 restricted to
+RFC 8259 values (no NaN/Infinity, no lone surrogates), while keeping v1/v2
+readers. RFC 8259 fixes syntax, not bytes, so the new versions must also define
+a versioned canonical encoding for digest payloads (key order, separators,
+escaping, number spelling) and how readers select it from the schema version.
 
 - Simplifies what new Runs contain and can later retire parity code once no
   supported store holds old versions.
@@ -130,7 +140,11 @@ Do not choose C while any user depends on existing `.seal` state.
 ## Required steps if approved
 
 1. Record the transition in `MIGRATION_CHARTER.md` (scope: behavioral authority,
-   not schema) and update `REFERENCE.md` to mark Python as historical.
+   not schema) and update `REFERENCE.md` to mark Python as historical. Update
+   every other authority declaration in the same change: the headers of
+   `conformance/read-only-contract.md`, `conformance/task-create-contract.md`,
+   and `conformance/verify-contract.md`, and the Reference paragraph in
+   `README.md`.
 2. Update `AGENTS.md` migration rules that require Reference justification.
 3. Re-home the corpus as Go golden tests; keep fixture provenance in
    `conformance/README.md`.
@@ -141,6 +155,9 @@ Do not choose C while any user depends on existing `.seal` state.
 6. Before relaxing any rule, add raw golden bytes for every public output and
    stored document that must stay byte-exact. Today only cases with
    `stdout_raw_hex` are compared byte for byte.
+7. Before choosing option B or C, inventory every `pyjson` call site that
+   affects decoding, equality, or digest encoding for stored documents, with a
+   regression scenario for each affected document class and its exit code.
 
 ## Verification
 
