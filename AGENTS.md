@@ -8,8 +8,9 @@ These instructions apply to the entire repository.
 - Native Agents own planning, implementation, and execution.
 - Seal exposes deterministic state and decisions; it does not own workflow
   transitions or invoke other Toolkit modules.
-- The Codex Plugin is a thin adapter over the documented CLI. It must not make
-  Acceptance decisions itself or take workflow authority from Native Agents.
+- The Codex and Claude Code Plugins are thin adapters over the documented CLI
+  and share one Skill. They must not make Acceptance decisions themselves or
+  take workflow authority from Native Agents.
 - The frozen Python implementation identified in `REFERENCE.md` is the
   behavioral reference until an explicit canonical transition is approved.
 

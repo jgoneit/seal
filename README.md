@@ -107,12 +107,15 @@ attestation. Checks inherit the caller environment, raw logs and diffs may
 contain secrets, and Completion binds source only at its S2 observation. See
 [TRUST_MODEL.md](TRUST_MODEL.md) for the complete trust and retention boundary.
 
-## Codex Plugin
+## Agent Plugins
 
-This checkout is also a skills-only local Codex Plugin. The Plugin makes the
+This checkout is also a skills-only Plugin for Codex and Claude Code. Both
+hosts load the same Skill from `skills/seal/`; `.codex-plugin/plugin.json` and
+`.claude-plugin/plugin.json` are thin host manifests. The Plugin makes the
 documented CLI available to Native Agents; it does not bundle the `seal` binary
 or add another Acceptance authority. After the Plugin and CLI are installed,
-`@Seal` selects it explicitly. Its single Skill may also be selected for a
+`@Seal` in Codex or `/seal:seal` in Claude Code selects it explicitly. Its
+single Skill may also be selected for a
 concrete implementation request when the target repository already opts in
 with `.seal/checks.json` and has a clean worktree before implementation.
 Planning, explanation, read-only review, dirty worktrees, and unconfigured
@@ -131,6 +134,28 @@ Agent keeps control of the exact selected argv and timeout under its ordinary
 permission and Scope boundaries.
 Start a new Codex Task after installing or updating the Plugin so its Skill is
 loaded.
+
+In Claude Code, add this repository as a marketplace and install the Plugin;
+it loads in the next session:
+
+```text
+/plugin marketplace add jgoneit/seal
+/plugin install seal@seal
+```
+
+`verify` can outlast Claude Code's default foreground Bash timeout, which moves
+the command to the background rather than stopping it. The Skill runs `verify`
+as a background command from the start and waits for that same invocation
+instead of starting another `verify`. Target repositories
+should also ignore Claude Code's local files, such as
+`.claude/settings.local.json` and `.claude/worktrees/`, so they neither block
+implicit activation as a dirty worktree nor appear as out-of-Scope changes.
+Seal runtime state lives in the Git worktree where the Agent ran; collect any
+needed `seal run export --format json` output before removing that worktree.
+
+The Claude Code manifest is part of the release Acceptance surface, and its
+version is checked against the tag like the Codex manifest. Adding it after
+`v0.3.0-rc.4` requires a new RC before a stable release.
 
 Opted-in repositories should track `.seal/checks.json` and ignore local runtime
 state:
