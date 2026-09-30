@@ -1,6 +1,6 @@
 ---
 name: seal
-description: Use Seal for evidence-backed Acceptance of a concrete repository change. Use when the user selects @Seal or $seal, and consider it automatically before implementation only for a clean, opted-in Git repository whose selected checks pass the Agent-safe preflight. Do not auto-activate for planning, explanation, read-only review, non-Git work, dirty worktrees, or unconfigured repositories.
+description: Use Seal for evidence-backed Acceptance of a concrete repository change. Use when the user selects @Seal or $seal in Codex or /seal:seal in Claude Code, and consider it automatically before implementation only for a clean, opted-in Git repository whose selected checks pass the Agent-safe preflight. Do not auto-activate for planning, explanation, read-only review, non-Git work, dirty worktrees, or unconfigured repositories.
 metadata:
   short-description: Record evidence-backed completion
 ---
@@ -13,7 +13,8 @@ authority for Task, Evidence, Run, and Completion results.
 
 ## Activation
 
-Explicit `@Seal` or `$seal` selection loads the Skill. A discussion, plan, or
+Explicit selection loads the Skill: `@Seal` or `$seal` in Codex, or
+`/seal:seal` in Claude Code. A discussion, plan, or
 audit remains read-only and creates no Seal lifecycle state. For an exact
 read-only query, use only Task and Run identities supplied by the user or
 retained in this task; never infer a latest identity. A missing catalog does
@@ -51,8 +52,11 @@ Before any Seal command:
    (`$HOME/.local/bin/seal` on Linux or macOS, or
    `%LOCALAPPDATA%\Programs\Seal\bin\seal.exe` on Windows) only when it is an
    executable regular file. Reuse that exact executable.
-3. Run `--version` and compare it with the Plugin version in
-   `.codex-plugin/plugin.json`, removing only a `+codex.*` suffix.
+3. Run `--version` and compare it with the `version` in the manifest of the
+   Plugin that loaded this Skill (`.codex-plugin/plugin.json` in Codex or
+   `.claude-plugin/plugin.json` in Claude Code), removing only its `+` build
+   suffix. In Claude Code the Plugin root is `${CLAUDE_PLUGIN_ROOT}`; resolve
+   Plugin-relative paths in this Skill from it.
 
 The Plugin does not install Core. On an implicit CLI or version failure, skip
 Seal and continue. On explicit use, report the prerequisite failure before
@@ -89,9 +93,9 @@ checks, Agent-judged proportional risk, and `verifier.required=false`. Risk is
 descriptive metadata, not an approval or Core gate. Do not add
 `preferred_runner`.
 
-Keep the input outside the repository and run
-`seal task create --file <TASK_JSON>`. Never use `--force` without an explicit
-request to replace that exact Task. Start implementation only after successful
+Keep the input outside the repository, such as in the host session's temporary
+directory, and run `seal task create --file <TASK_JSON>`. Never use
+`--force` without an explicit request to replace that exact Task. Start implementation only after successful
 Task creation with usable output. On exit `2` or `3`, report the Task as not
 created. On exit `1` or unusable success output, report it as indeterminate
 because Core may already have published the Task; do not retry, infer its
@@ -123,6 +127,16 @@ At a completion candidate, run `seal verify <TASK_ID>` exactly once. Exit `0`
 means Evidence was recorded, not that it passed. Capture the returned exact Run
 ID. On nonzero exit or unusable output, report Evidence as indeterminate and do
 not call `run show` or `complete`; never infer an ID or inspect raw Evidence.
+
+`verify` can run for several minutes within Core's own time budget. If the host
+shell has a shorter timeout or moves the command to the background, wait for
+that same invocation's exit status and stdout; do not start another `verify`,
+`complete`, or cleanup while it runs. In Claude Code, run `verify` as a
+background Bash command and wait for its completion notification. Do not rely
+on a foreground timeout equal to Core's budget: Core's clock starts only after
+Task and check admission, so the host limit must also cover admission and a
+clean return. If the host terminated the process instead, report Evidence as
+indeterminate and do not retry or remove any `.seal` staging residue.
 
 When every selected check is required, minimize the happy path:
 
