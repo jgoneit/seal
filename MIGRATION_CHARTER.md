@@ -167,6 +167,11 @@ scenarios. This approval covers only the read-only interface; it authorizes no
 general feature expansion or canonical implementation transition. Publication
 as a new RC and acceptance evidence for that RC remain separate decisions.
 
+On 2026-09-30 the user approved simplifying the export's concurrent-change
+inventory to entry names and object identities. In-place writes to existing
+documents are no longer detected; the exported fields, validation boundary,
+and Acceptance semantics are unchanged.
+
 ## Explicit exclusions
 
 The migration does not bring over Python packaging, private helpers, Legacy

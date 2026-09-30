@@ -25,7 +25,7 @@ duplicate implementations, repeated work, and bounded over-design.
 | 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | done | [#28](https://github.com/jgoneit/seal/pull/28) |
 | 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | done | [#29](https://github.com/jgoneit/seal/pull/29) |
 | 5 | Fewer repeated Git subprocesses during source observation | done | [#30](https://github.com/jgoneit/seal/pull/30) |
-| 6 | Simpler `run export` concurrent-change detection | pending | |
+| 6 | Simpler `run export` concurrent-change detection | done | [#31](https://github.com/jgoneit/seal/pull/31) |
 | 7 | Go canonical transition proposal for Legacy byte-parity code | pending | |
 
 ## Task notes
@@ -80,7 +80,10 @@ the remaining cost is the `cat-file --batch` follow-up below.
 
 The before/after inventory hashes metadata documents under separate 100,000
 entry, 64 MiB, and depth-32 bounds. The simplified form compares directory
-listings and object identity only.
+listings and object identity only, keeping the 100,000-entry bound. It still
+detects Task, Run, and Completion publication, removal, and same-name
+replacement; an in-place rewrite of an existing document is no longer
+detected, and its regression scenario was removed.
 
 ### 7. Canonical transition
 
