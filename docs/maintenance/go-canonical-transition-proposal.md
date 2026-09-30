@@ -17,14 +17,24 @@ Sizes are after the simplification stack in [`simplification.md`](simplification
 
 | Area | Where | Size | Why it exists |
 |---|---|---:|---|
-| Python JSON decoding: NaN/Infinity constants, lone-surrogate escapes, CPython 4300-digit integers, depth classification | `internal/pyjson/decode.go` | ~360 lines | `json.load` accepts inputs Go rejects or alters |
+| Python JSON decoding: NaN/Infinity constants, lone-surrogate escapes, CPython 4300-digit integers | `internal/pyjson/decode.go` | ~390 lines | `json.load` accepts inputs Go rejects or alters |
 | Python rendering and equality: sorted keys, `repr` floats, surrogateescape bytes, bool/int/float `==` | `internal/pyjson/encode.go`, `value.go` | ~400 lines | stored bytes, digests, and saved-Task comparisons must match Python |
-| Runtime exit-1 categories for invalid UTF-8, integer limit, nesting depth, unencodable surrogates | `taskstate`, `runstate` error mapping | ~80 lines | Reference exits 1 on these uncaught exceptions |
+| Runtime exit-1 categories for invalid UTF-8, integer limit, unencodable surrogates | `taskstate`, `runstate` error mapping | ~80 lines | Reference exits 1 on these uncaught exceptions |
 | `argparse`-shaped option handling and help text | `cmd/seal/main.go` parsers | ~200 lines | frozen CLI category parity |
 | Frozen read semantics: `task show`/`run show` follow a symlinked saved Task; `run show`/`complete` walk up to `.git` | `runstate`, `TRUST_MODEL.md` | small | Reference compatibility, documented as not a security boundary |
 | Legacy Completion v1 records rejected but never rewritten | `runstate/complete.go` | small | coexistence with Python-written stores |
 | Conformance corpus and its tests | `conformance/fixtures`, `conformance/expected`, `cmd/seal/conformance_test.go`, `task_create_conformance_test.go` | ~3,500 JSON + ~2,350 test lines | byte-exact comparison with Reference captures |
 | "Every Go Run must be accepted by frozen Python `run show`" | `conformance/verify-contract.md` | rule | cross-implementation acceptance |
+
+JSON nesting depth is not in this table because it is not Reference parity.
+Go keeps the standard `encoding/json` depth bound as a Go-owned resource policy.
+For 10,000 nested arrays, `task show` exits 1 where the Reference exits 0, and
+deep matching Task extras in `run show` get deterministic classifications
+instead of CPython's order-dependent `RecursionError`. Both are approved
+divergences in [`read-only-contract.md`](../../conformance/read-only-contract.md).
+`task create` classifies its depth failure as exit 2, a gap already listed in
+[`simplification.md`](simplification.md). An authority transfer cannot remove
+these rules; any change to them must be evaluated separately as Go policy.
 
 ## What a transition cannot remove
 
@@ -37,8 +47,18 @@ Python-specific values.
 
 Therefore the canonical encoder and the decoder features that stored documents
 can contain must stay for as long as existing stores must validate. Seal has no
-migration tool and the charter forbids automatic repair. Removing them would make
-existing Runs fail with exit 8.
+migration tool and the charter forbids automatic repair. What removal would
+change depends on the document and the value:
+
+| Stored content | Effect of replacing `pyjson` with a strict Go decoder/encoder |
+|---|---|
+| Saved Task with a Python-only value (NaN/Infinity, lone surrogate) | `readSavedTask` fails before Evidence is read: identity error, exit 2 |
+| Run documents (`task.json`, manifest, Source Snapshot) with such values, or digests that depend on Python rendering (float `repr`, ASCII escapes, surrogateescape bytes) | Evidence validation fails, exit 8 |
+| Integer longer than 4,300 digits | today runtime exit 1; without the guard it would be accepted (exit 0), which changes the outcome the other way |
+| Only the JSON subset both implementations render identically | stays valid, provided the canonical encoder keeps the same bytes |
+
+Seal cannot tell ahead of time which stores fall into which class, so option A
+keeps the whole layer.
 
 ## Options
 
@@ -72,9 +92,11 @@ Drop Python parity and declare earlier stores unsupported.
 
 - Deletes most of `pyjson` decoding edge cases, runtime exit-1 categories, and
   the corpus (several thousand lines).
-- Every existing Run and Completion stops validating; exact lookup and
-  Completion from those states are lost. Contradicts the current migration
-  invariants and the RC acceptance history.
+- Existing Tasks, Runs, and Completions with Python-specific values or
+  rendering stop validating, with the exit categories shown above; exact lookup
+  and Completion from those states are lost. Because affected stores cannot be
+  identified in advance, this contradicts the current migration invariants and
+  the RC acceptance history.
 
 ## Recommendation
 
@@ -92,10 +114,17 @@ Do not choose C while any user depends on existing `.seal` state.
    `conformance/verify-contract.md`.
 5. Cut a new RC; the Acceptance surface digest changes, so the stable gate
    needs a fresh 20-Task report.
+6. Before relaxing any rule, add raw golden bytes for every public output and
+   stored document that must stay byte-exact. Today only cases with
+   `stdout_raw_hex` are compared byte for byte.
 
 ## Verification
 
-- All existing conformance fixtures still produce identical bytes and exit
-  codes under the Go golden tests before any rule is relaxed.
+- The Go golden tests keep today's corpus checks: exact exit codes, stderr
+  category and normalized message shape, and stdout compared as decoded JSON
+  (`reflect.DeepEqual`). That establishes semantic, normalized parity, not
+  identical bytes. Key-order or whitespace changes would still pass.
+- Byte identity is established only by the raw goldens from step 6, plus the
+  existing `stdout_raw_hex` cases.
 - Runs created before the transition, both Go- and Python-written, still pass
   `run show` and `complete` in a regression scenario.
