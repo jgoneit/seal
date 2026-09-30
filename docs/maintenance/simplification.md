@@ -24,8 +24,8 @@ duplicate implementations, repeated work, and bounded over-design.
 | 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | done | [#27](https://github.com/jgoneit/seal/pull/27) |
 | 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | done | [#28](https://github.com/jgoneit/seal/pull/28) |
 | 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | done | [#29](https://github.com/jgoneit/seal/pull/29) |
-| 5 | Fewer repeated Git subprocesses during source observation | done | simplify/05-source-observation |
-| 6 | Simpler `run export` concurrent-change detection | pending | |
+| 5 | Fewer repeated Git subprocesses during source observation | done | [#30](https://github.com/jgoneit/seal/pull/30) |
+| 6 | Simpler `run export` concurrent-change detection | done | simplify/06-export-inventory |
 | 7 | Go canonical transition proposal for Legacy byte-parity code | pending | |
 
 ## Task notes
@@ -79,7 +79,10 @@ from 4,093 to 2,080 Git processes (4,004 to 2,002 `cat-file`) and from about
 
 The before/after inventory hashes metadata documents under separate 100,000
 entry, 64 MiB, and depth-32 bounds. The simplified form compares directory
-listings and object identity only.
+listings and object identity only, keeping the 100,000-entry bound. It still
+detects Task, Run, and Completion publication, removal, and same-name
+replacement; an in-place rewrite of an existing document is no longer
+detected, and its regression scenario was removed.
 
 ### 7. Canonical transition
 

@@ -413,27 +413,6 @@ func TestExportConcurrentChangesPreserveAlreadyValidatedRuns(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"same-size-metadata-write-restored-time", func(t *testing.T, f runFixture) {
-			path := filepath.Join(f.runPath, "checks.json")
-			info, err := os.Stat(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			contents, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			changed := bytes.Replace(contents, []byte("0.1"), []byte("0.2"), 1)
-			if bytes.Equal(contents, changed) {
-				t.Fatal("fixture duration missing")
-			}
-			if err := os.WriteFile(path, changed, info.Mode().Perm()); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
-				t.Fatal(err)
-			}
-		}},
 		{"completion-publication", func(t *testing.T, f runFixture) { writeExportCompletion(t, f) }},
 	}
 	for _, tc := range cases {

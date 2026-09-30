@@ -105,7 +105,7 @@ The static issue codes are:
 | `invalid_evidence` | Exact Run validation fails; that Run is excluded. |
 | `invalid_completion` | Historical Completion cannot be safely read or validated; the Run remains. |
 | `invalid_metric` | An otherwise valid Run has an unusable timestamp or duration; that field becomes null. |
-| `concurrent_change` | A bounded inventory detects change during the scan. |
+| `concurrent_change` | The before/after inventory detects a published, removed, or replaced entry during the scan. |
 | `scan_limit` | A scan/inventory bound is exceeded; the report is incomplete. |
 
 Issue identities are null when unavailable or unsafe to disclose as an identity;
@@ -120,24 +120,25 @@ invalid candidates. Private `.tmp-*` entries and the Task writer's `.task.tmp-*`
 entries are ignored when selecting published identities, but still count toward
 directory entry limits. A successful Task publication may leave its private file
 when cleanup fails; export neither reports it as an invalid Task nor removes it.
-Each before/after inventory is bounded by 100,000 entries, 64 MiB of
-metadata-document hashing, and recursive depth 32 starting at `.seal/tasks` or
-`.seal/evidence`. A bound reports
-`scan_limit`; it is never evidence of a complete inventory. Completion reads
-are capped at 64 KiB; an oversized Completion reports `invalid_completion`.
+Each before/after inventory lists `.seal/tasks`, `.seal/evidence`, each Task
+Evidence directory, and each Run directory, and is bounded by 100,000 entries.
+A bound reports `scan_limit`; it is never evidence of a complete inventory.
+Completion reads are capped at 64 KiB; an oversized Completion reports
+`invalid_completion`.
 
 Export rejects directory and saved Task symlinks even where older compatibility
 queries permit them; it retains canonical Evidence validation. The scan is not
-a transactional global snapshot. Before/after inventories compare object
-identity, size, and modification time, plus hashes of metadata documents, to
-flag detected publication, removal, replacement, or writes. Already validated
-results remain available. An undetected change remains possible.
+a transactional global snapshot. Before/after inventories compare entry names
+and object identities to flag Task, Run, and Completion publication, removal,
+or replacement. They do not read file contents, so an in-place write to an
+existing document is not detected. Already validated results remain available.
+An undetected change remains possible.
 
 ## Periodic consumers
 
 Use an external timeout suitable for the repository: canonical Run validation
-hashes saved Evidence, including potentially large logs. The inventory limits
-do not cap that total validation work. Interrupted or incomplete output must
+hashes saved Evidence, including potentially large logs. The inventory limit
+does not cap that total validation work. Interrupted or incomplete output must
 not advance a successful collection checkpoint.
 
 Full scans revisit immutable Runs; deduplicate exact identities and Evidence

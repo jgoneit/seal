@@ -1,7 +1,6 @@
 package runstate
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,8 +16,7 @@ import (
 )
 
 const exportEntryLimit = 10_000
-const exportSnapshotEntryLimit = 100_000
-const exportSnapshotHashLimit int64 = 64 << 20
+const exportInventoryEntryLimit = 100_000
 
 // ExportReport is a read-only, content-free projection of stored Runs. It
 // reports local record consistency, not tool delivery or current Acceptance.
@@ -233,64 +231,53 @@ func (report *ExportReport) exportTasks(repository string, seal *os.Root) {
 	sort.Slice(report.Tasks, func(i, j int) bool { return report.Tasks[i].TaskID < report.Tasks[j].TaskID })
 }
 
-// The export is not a transactional filesystem snapshot. This bounded second
-// inventory detects ordinary concurrent publication, replacement, removal and
-// writes without re-running checks or reading current product source. Metadata
-// documents are additionally hashed; other evidence files use identity/size/time.
-type exportInventoryEntry struct {
-	info   fs.FileInfo
-	digest [sha256.Size]byte
-	hashed bool
-}
-
-type exportInventoryState struct {
-	entries     map[string]exportInventoryEntry
-	hashedBytes int64
-}
-
-func exportInventory(root *os.Root) (map[string]exportInventoryEntry, string) {
-	state := exportInventoryState{entries: map[string]exportInventoryEntry{}}
+// The export is not a transactional filesystem snapshot. Comparing the
+// published names and object identities under .seal/tasks and .seal/evidence
+// before and after the scan detects concurrent Task, Run, and Completion
+// publication, removal, and replacement. File contents are not read, so an
+// in-place write to an existing document is not detected.
+func exportInventory(root *os.Root) (map[string]fs.FileInfo, string) {
+	inventory := map[string]fs.FileInfo{}
 	seal, code := openExportDirectory(root, ".seal")
 	if code == "absent" {
-		return state.entries, ""
+		return inventory, ""
 	}
 	if code != "" {
-		return state.entries, code
+		return inventory, code
 	}
 	defer seal.Close()
 	info, err := seal.Stat(".")
 	if err != nil {
-		return state.entries, "unreadable"
+		return inventory, "unreadable"
 	}
-	state.entries[".seal"] = exportInventoryEntry{info: info}
-	// Only identities of .seal itself matter. Unrelated files such as lessons
-	// are not observed, and changing them does not invalidate Run enumeration.
-	for _, name := range []string{"tasks", "evidence"} {
-		if code := state.directory(seal, name, ".seal/"+name, 0); code != "" {
-			return state.entries, code
+	inventory[".seal"] = info
+	// Task snapshots are one level deep; Evidence is Task, Run, then Run files.
+	for _, directory := range []struct {
+		name   string
+		levels int
+	}{{"tasks", 0}, {"evidence", 2}} {
+		if code := listExportInventory(inventory, seal, directory.name, ".seal/"+directory.name, directory.levels); code != "" {
+			return inventory, code
 		}
 	}
-	return state.entries, ""
+	return inventory, ""
 }
 
-func (state *exportInventoryState) directory(parent *os.Root, name, path string, depth int) string {
-	if depth > 32 || len(state.entries) >= exportSnapshotEntryLimit {
-		return "scan_limit"
-	}
-	root, code := openExportDirectory(parent, name)
+func listExportInventory(inventory map[string]fs.FileInfo, parent *os.Root, name, path string, levels int) string {
+	directory, code := openExportDirectory(parent, name)
 	if code == "absent" {
 		return ""
 	}
 	if code != "" {
 		return code
 	}
-	defer root.Close()
-	info, err := root.Stat(".")
+	defer directory.Close()
+	info, err := directory.Stat(".")
 	if err != nil {
 		return "unreadable"
 	}
-	state.entries[path] = exportInventoryEntry{info: info}
-	entries, code := exportEntries(root)
+	inventory[path] = info
+	entries, code := exportEntries(directory)
 	if code != "" {
 		return code
 	}
@@ -298,79 +285,32 @@ func (state *exportInventoryState) directory(parent *os.Root, name, path string,
 		if strings.HasPrefix(entry.Name(), ".tmp-") {
 			continue
 		}
-		if len(state.entries) >= exportSnapshotEntryLimit {
+		if len(inventory) >= exportInventoryEntryLimit {
 			return "scan_limit"
 		}
 		childPath := path + "/" + entry.Name()
-		info, err := root.Lstat(entry.Name())
+		info, err := directory.Lstat(entry.Name())
 		if err != nil {
 			return "concurrent_change"
 		}
-		if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-			if code := state.directory(root, entry.Name(), childPath, depth+1); code != "" {
+		if levels > 0 && info.IsDir() {
+			if code := listExportInventory(inventory, directory, entry.Name(), childPath, levels-1); code != "" {
 				return code
 			}
 			continue
 		}
-		item := exportInventoryEntry{info: info}
-		if info.Mode().IsRegular() && exportHashDocument(path, entry.Name()) {
-			if info.Size() < 0 || state.hashedBytes > exportSnapshotHashLimit-info.Size() {
-				return "scan_limit"
-			}
-			file, err := root.OpenFile(entry.Name(), os.O_RDONLY, 0)
-			if err != nil {
-				return "unreadable"
-			}
-			opened, err := file.Stat()
-			if err != nil || !sameExportFileInfo(info, opened, false) {
-				file.Close()
-				return "concurrent_change"
-			}
-			hash := sha256.New()
-			count, readErr := io.Copy(hash, io.LimitReader(file, info.Size()+1))
-			after, statErr := file.Stat()
-			closeErr := file.Close()
-			if readErr != nil || statErr != nil || closeErr != nil {
-				return "unreadable"
-			}
-			named, namedErr := root.Lstat(entry.Name())
-			if count != info.Size() || !sameExportFileInfo(info, after, false) || namedErr != nil || !sameExportFileInfo(info, named, false) {
-				return "concurrent_change"
-			}
-			copy(item.digest[:], hash.Sum(nil))
-			item.hashed = true
-			state.hashedBytes += count
-		}
-		state.entries[childPath] = item
+		inventory[childPath] = info
 	}
 	return ""
 }
 
-func exportHashDocument(parent, name string) bool {
-	if parent == ".seal/tasks" {
-		return strings.HasSuffix(name, ".json")
-	}
-	switch name {
-	case "task.json", "changed-files.json", "checks.json", "verification.json", "source-before-checks.json", "source-after-checks.json", "run-manifest.json", "completion.json":
-		return true
-	}
-	return false
-}
-
-func sameExportFileInfo(a, b fs.FileInfo, identityOnly bool) bool {
-	if a == nil || b == nil || !os.SameFile(a, b) || a.Mode() != b.Mode() {
-		return false
-	}
-	return identityOnly || (a.Size() == b.Size() && a.ModTime().Equal(b.ModTime()))
-}
-
-func sameExportInventory(a, b map[string]exportInventoryEntry) bool {
+func sameExportInventory(a, b map[string]fs.FileInfo) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for path, before := range a {
 		after, ok := b[path]
-		if !ok || !sameExportFileInfo(before.info, after.info, path == ".seal") || before.hashed != after.hashed || before.digest != after.digest {
+		if !ok || !os.SameFile(before, after) || before.Mode() != after.Mode() {
 			return false
 		}
 	}
