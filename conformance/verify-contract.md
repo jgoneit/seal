@@ -61,7 +61,9 @@ selection, retry, repair, and extra positional arguments are rejected.
 
 The externally meaningful order is:
 
-1. validate CLI identity and resolve the enclosing Git worktree;
+1. validate CLI identity and resolve the enclosing Git worktree with
+   `git rev-parse --show-toplevel` in the caller's environment, the same
+   discovery `task create` uses and the frozen Reference verify performs;
 2. read and fully prevalidate the saved Task and resolved check definitions;
 3. collect stable source snapshot S0;
 4. allocate a private staging Run and write the saved Task snapshot;

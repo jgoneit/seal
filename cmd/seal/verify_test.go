@@ -20,6 +20,36 @@ import (
 	"github.com/jgoneit/seal/internal/runstate"
 )
 
+func TestRunCLIVerifyResolvesTheSameWorktreeAsTaskCreate(t *testing.T) {
+	fixture := createContractNewFixture(t, true)
+	// Git skips an empty .git directory during discovery; a .git walk-up
+	// would stop here and look for the Task in the wrong root.
+	nested := filepath.Join(fixture.repository, "nested")
+	if err := os.MkdirAll(filepath.Join(nested, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	created := createContractRun(t, nested, "task", "create", "--file", fixture.input)
+	if created.code != 0 {
+		t.Fatalf("task create failed: %s", created.stderr)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := runCLI(nested, []string{"verify", createContractTaskID}, &stdout, &stderr)
+	if code != 0 || stderr.Len() != 0 {
+		t.Fatalf("verify code = %d, stderr = %q", code, stderr.String())
+	}
+	result := decodeSingleJSON(t, stdout.Bytes()).(map[string]any)
+	resolvedRepository, err := filepath.EvalSymlinks(fixture.repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPrefix := filepath.Join(resolvedRepository, ".seal", "evidence", createContractTaskID) + string(filepath.Separator)
+	if path, _ := result["evidence_path"].(string); !strings.HasPrefix(path, wantPrefix) {
+		t.Fatalf("evidence_path = %#v, want under %q", result["evidence_path"], wantPrefix)
+	}
+}
+
 func TestRunCLIVerifyPublishesRunReadableByRunShow(t *testing.T) {
 	fixture := createContractNewFixture(t, true)
 	created := createContractRun(t, fixture.repository, "task", "create", "--file", fixture.input)
@@ -525,8 +555,11 @@ func verifyAncestorInstallGitGate(t *testing.T) (directory, ready, release strin
 	release = filepath.Join(directory, "release")
 	once := filepath.Join(directory, "once")
 	wrapperName := "git"
+	// Worktree discovery runs `git -C <cwd> rev-parse` before the saved Task is
+	// read; only source observation, which starts with --no-replace-objects,
+	// opens the gate after admission.
 	wrapper := `#!/bin/sh
-if mkdir "$SEAL_VERIFY_GATE_ONCE" 2>/dev/null; then
+if [ "$1" != "-C" ] && mkdir "$SEAL_VERIFY_GATE_ONCE" 2>/dev/null; then
   : > "$SEAL_VERIFY_GATE_READY"
   while [ ! -e "$SEAL_VERIFY_GATE_RELEASE" ]; do
     sleep 0.01
@@ -537,6 +570,7 @@ exec "$SEAL_VERIFY_REAL_GIT" "$@"
 	if runtime.GOOS == "windows" {
 		wrapperName = "git.cmd"
 		wrapper = `@echo off
+if "%~1"=="-C" goto seal_verify_run
 2>nul mkdir "%SEAL_VERIFY_GATE_ONCE%"
 if not errorlevel 1 (
   type nul > "%SEAL_VERIFY_GATE_READY%"
@@ -546,6 +580,7 @@ if not errorlevel 1 (
     goto seal_verify_wait
   )
 )
+:seal_verify_run
 "%SEAL_VERIFY_REAL_GIT%" %*
 exit /b %errorlevel%
 `

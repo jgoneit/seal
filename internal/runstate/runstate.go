@@ -345,6 +345,8 @@ func asciiAlphaNumeric(character byte) bool {
 		character >= '0' && character <= '9'
 }
 
+// findRepositoryRoot walks up to the nearest .git marker without running Git,
+// as the frozen Reference's read-only Run commands (run show, complete) do.
 func findRepositoryRoot(cwd string) (string, error) {
 	workingDirectory := cwd
 	if workingDirectory == "" {

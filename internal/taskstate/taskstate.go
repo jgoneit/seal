@@ -10,12 +10,13 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/jgoneit/seal/internal/gitroot"
 )
 
 // Document is an opaque, syntactically valid stored Task JSON object. Task show
@@ -353,34 +354,14 @@ func isASCIIAlphanumeric(character byte) bool {
 }
 
 func findRepositoryRoot(cwd string) (string, error) {
-	if cwd == "" {
-		cwd = "."
+	root, err := gitroot.Find(cwd)
+	if errors.Is(err, gitroot.ErrGitUnavailable) {
+		return "", repositoryError("Git is required to create or show a task.", err)
 	}
-
-	command := exec.Command("git", "-C", cwd, "rev-parse", "--show-toplevel")
-	stdout, err := command.Output()
 	if err != nil {
-		var executableError *exec.Error
-		if errors.As(err, &executableError) {
-			return "", repositoryError("Git is required to create or show a task.", err)
-		}
 		return "", repositoryError("Task commands must run inside a Git repository.", err)
 	}
-
-	root := strings.TrimSpace(string(stdout))
-	if root == "" {
-		return "", repositoryError("Task commands must run inside a Git repository.", nil)
-	}
-
-	resolved, err := filepath.EvalSymlinks(root)
-	if err == nil {
-		return resolved, nil
-	}
-	absolute, absoluteError := filepath.Abs(root)
-	if absoluteError == nil {
-		return filepath.Clean(absolute), nil
-	}
-	return filepath.Clean(root), nil
+	return root, nil
 }
 
 func replacePythonConstants(contents []byte) ([]byte, constantMarkers) {
