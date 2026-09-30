@@ -79,7 +79,43 @@ func Decode(contents []byte) (any, error) {
 		}
 		return nil, err
 	}
+	// CPython fails at the first bad token in document order; decoded maps are
+	// unordered, so a constant key is located in the bytes before restoring.
+	if keyOffset := constantKeyOffset(protected); keyOffset >= 0 {
+		if containsOversizedInteger(protected[:keyOffset]) {
+			return nil, &IntegerLimitError{}
+		}
+		return nil, errConstantKey
+	}
 	return restore(value)
+}
+
+// constantKeyOffset returns the offset of the first constant marker used as an
+// object key in protected, or -1.
+func constantKeyOffset(protected []byte) int {
+	const marker = `"\u0000f`
+	for index := 0; index < len(protected); index++ {
+		if protected[index] != '"' {
+			continue
+		}
+		start := index
+		for index++; index < len(protected) && protected[index] != '"'; index++ {
+			if protected[index] == '\\' {
+				index++
+			}
+		}
+		if !bytes.HasPrefix(protected[start:], []byte(marker)) {
+			continue
+		}
+		next := index + 1
+		for next < len(protected) && strings.IndexByte(" \t\r\n", protected[next]) >= 0 {
+			next++
+		}
+		if next < len(protected) && protected[next] == ':' {
+			return start
+		}
+	}
+	return -1
 }
 
 func syntaxScanLimit(contents []byte, err error) int {
@@ -304,9 +340,6 @@ func restore(value any) (any, error) {
 	case map[string]any:
 		restoredMap := make(map[string]any, len(typed))
 		for key, item := range typed {
-			if isConstantMarker(key) {
-				return nil, errConstantKey
-			}
 			restored, err := restore(item)
 			if err != nil {
 				return nil, err
@@ -316,18 +349,6 @@ func restore(value any) (any, error) {
 		return restoredMap, nil
 	default:
 		return typed, nil
-	}
-}
-
-func isConstantMarker(value string) bool {
-	if len(value) < 2 || value[0] != 0 || value[1] != 'f' {
-		return false
-	}
-	switch value[2:] {
-	case "NaN", "Infinity", "-Infinity":
-		return true
-	default:
-		return false
 	}
 }
 

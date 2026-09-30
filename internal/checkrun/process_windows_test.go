@@ -125,14 +125,16 @@ func TestOutputLimitTerminatesWindowsProcessTree(t *testing.T) {
 	repository := t.TempDir()
 	evidence := privateTempDirectory(t)
 	evidenceRoot := openTestRoot(t, evidence)
-	childPIDPath := filepath.Join(t.TempDir(), "child.pid")
+	fixtureDirectory := t.TempDir()
+	childPIDPath := filepath.Join(fixtureDirectory, "child.pid")
+	releasePath := filepath.Join(fixtureDirectory, "release")
 	t.Setenv("SEAL_CHECKRUN_WINDOWS_TREE_HELPER", "1")
 
 	runDone := make(chan windowsTreeRunResult, 1)
 	go func() {
 		results, err := RunRootedContext(context.Background(), []Definition{{
 			Name:           "output tree",
-			Argv:           windowsTreeHelperArgv("tree-parent-output", childPIDPath),
+			Argv:           windowsTreeHelperArgv("tree-parent-output", childPIDPath, releasePath),
 			Required:       true,
 			TimeoutSeconds: big.NewInt(MaxTimeoutSeconds),
 		}}, repository, evidenceRoot)
@@ -141,6 +143,9 @@ func TestOutputLimitTerminatesWindowsProcessTree(t *testing.T) {
 
 	child := openWindowsHelperProcess(t, childPIDPath)
 	defer windows.CloseHandle(child)
+	if err := os.WriteFile(releasePath, []byte("write\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	outcome := waitForWindowsTreeRun(t, runDone)
 	assertResourceLimit(t, outcome.err, fmt.Sprintf(StdoutResourceLimitFormat, 0))
 	assertFileSize(t, filepath.Join(evidence, "checks", outputStem(0, "output tree")+".stdout"), MaxStreamOutputBytes)
@@ -252,6 +257,11 @@ func TestWindowsProcessTreeHelperProcess(t *testing.T) {
 			os.Exit(0)
 		}
 		if arguments[0] == "tree-parent-output" {
+			// Overflowing output makes the runner terminate the Job at once, so
+			// wait until the test holds a handle to the child before writing.
+			if len(arguments) != 3 || !waitForWindowsHelperPath(arguments[2]) {
+				os.Exit(80)
+			}
 			remaining := MaxStreamOutputBytes + 1
 			chunk := make([]byte, 64*1024)
 			for remaining > 0 {
