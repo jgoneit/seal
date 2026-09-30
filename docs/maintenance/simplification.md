@@ -21,8 +21,8 @@ duplicate implementations, repeated work, and bounded over-design.
 | # | Task | Status | Pull request |
 |---|---|---|---|
 | 1 | CLI cleanup: list `run export` in the usage synopsis, drop the redundant informational-command branch, drop the unused Completion observation hook | done | [#26](https://github.com/jgoneit/seal/pull/26) |
-| 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | done | simplify/02-verify-root |
-| 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | pending | |
+| 2 | `verify` repository-root discovery matches the frozen Reference (`git rev-parse`, like `task create`) | done | [#27](https://github.com/jgoneit/seal/pull/27) |
+| 3 | One Python-compatible JSON implementation (`internal/pyjson`) for `runstate`, `taskstate`, and `sourceobs` | done | simplify/03-pyjson |
 | 4 | Shared no-replace publication and Windows private-descriptor helpers inside `runstate` | pending | |
 | 5 | Fewer repeated Git subprocesses during source observation | pending | |
 | 6 | Simpler `run export` concurrent-change detection | pending | |
@@ -51,6 +51,12 @@ different roots.
 pretty printing (about 700 duplicated lines) with different surrogate and
 constant strategies. `runstate` float rendering used Go's shortest `%g`, which
 switches to exponent form at 1e6 where Python `repr` does not.
+
+`internal/pyjson` now holds the single implementation, and `sourceobs` renders
+its fixed-schema artifacts through it. Two outcomes moved to the Reference
+behavior: floats in [1e6, 1e16) render as Python `repr`, and a stored
+non-object document containing an over-limit integer reports the integer
+limit (as CPython parsing does) before the object-shape failure.
 
 ### 4. Platform publication helpers
 
